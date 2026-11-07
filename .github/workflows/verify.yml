@@ -1,0 +1,28 @@
+name: Verify local LAN queue system
+
+on:
+  push:
+    branches: [main, restore-local-sqlite-lan]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows-build:
+    runs-on: windows-2022
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Type-check frontend and server
+        run: npm run typecheck
+      - name: Build production frontend
+        run: npm run build
