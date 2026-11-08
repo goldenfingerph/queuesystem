@@ -4,6 +4,7 @@ import https from 'node:https';
 import { config, validateServerEnvironment } from './config.js';
 import { getDb, closeDb } from './db/index.js';
 import { initWs, closeWs } from './ws/index.js';
+import { pruneQueueEvents } from './lib/queue-event-retention.js';
 
 type QueueServer = http.Server | https.Server;
 
@@ -44,8 +45,21 @@ async function start(): Promise<void> {
   const { createApp } = await import('./app.js');
   const app = createApp();
   const server = createQueueServer(app);
-  getDb(); // Run migrations and initialize the first administrator before accepting LAN traffic.
+  const db = getDb(); // Run migrations and initialize the first administrator before accepting LAN traffic.
   console.log('[server] database ready at', config.dbPath);
+
+  const runQueueEventRetention = (): void => {
+    try {
+      const removed = pruneQueueEvents(db, config.queueEventRetentionDays);
+      if (removed > 0) console.log(`[maintenance] pruned ${removed} old queue events (retention: ${config.queueEventRetentionDays} days)`);
+    } catch (error) {
+      // Maintenance must never prevent the queue server from continuing to run.
+      console.error('[maintenance] queue event retention failed:', error);
+    }
+  };
+  runQueueEventRetention();
+  const retentionTimer = setInterval(runQueueEventRetention, 24 * 60 * 60 * 1000);
+  retentionTimer.unref();
   initWs(server);
   const protocol = server instanceof https.Server ? 'https' : 'http';
   const wsProtocol = protocol === 'https' ? 'wss' : 'ws';
