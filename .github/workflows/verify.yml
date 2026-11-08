@@ -59,3 +59,51 @@ jobs:
         run: npm run test:backend
       - name: Lint frontend and backend
         run: npm run lint
+      - name: Package Windows 11 test bundle
+        shell: pwsh
+        run: |
+          $packageDir = Join-Path $env:RUNNER_TEMP "QueueSystem-Windows"
+          New-Item -ItemType Directory -Force -Path $packageDir | Out-Null
+          robocopy . $packageDir /E /XD .git .github node_modules/.cache /XF npm-audit.json
+          if ($LASTEXITCODE -ge 8) { throw "Failed to stage Windows package (robocopy exit $LASTEXITCODE)" }
+          $readme = @'
+          QUEUE SYSTEM - WINDOWS 11 TEST PACKAGE
+
+          REQUIREMENTS
+          - Windows 10/11 64-bit
+          - Node.js 22 LTS (https://nodejs.org/en/download)
+          - Internet connection for the first dependency installation
+
+          FIRST RUN
+          1. Extract this entire ZIP to a writable folder, e.g. C:\QueueSystem.
+          2. Install Node.js 22 LTS if it is not already installed.
+          3. Double-click INSTALL-INFINITY-SERVICES.bat and wait for completion.
+          4. Double-click START-INFINITY-SERVICES.bat.
+          5. On this PC, open http://localhost:4000.
+          6. From another device on the same private LAN, open http://<SERVER-IP>:4000.
+          7. Keep the server command window open while using the system.
+
+          DATA SAFETY
+          The application stores its local SQLite database under server\data by default.
+          Back up that folder before replacing or reinstalling an existing instance.
+          Do not extract over an existing live installation or production data folder.
+
+          SECURITY
+          Default LAN mode is HTTP/WS and is not encrypted. Use only on a trusted private
+          network for testing. Configure trusted TLS certificates before exposing it
+          beyond a private test LAN. PWA installation on other LAN devices requires HTTPS.
+
+          This is a Windows test bundle, not a signed commercial installer or an
+          independently verified production deployment.
+          '@
+          Set-Content -Path (Join-Path $packageDir "WINDOWS-11-TEST-INSTRUCTIONS.txt") -Value $readme -Encoding UTF8
+          $zipPath = Join-Path $env:RUNNER_TEMP "QueueSystem-Windows11-Test.zip"
+          Compress-Archive -Path (Join-Path $packageDir "*") -DestinationPath $zipPath -CompressionLevel Optimal
+          Get-Item $zipPath | Format-List FullName,Length
+      - name: Upload Windows 11 test package
+        uses: actions/upload-artifact@v4
+        with:
+          name: QueueSystem-Windows11-Test
+          path: ${{ runner.temp }}/QueueSystem-Windows11-Test.zip
+          if-no-files-found: error
+          retention-days: 30
