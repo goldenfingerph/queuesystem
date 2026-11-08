@@ -1,0 +1,15 @@
+node_modules
+dist
+server-dist
+.git
+.github
+.env
+.env.local
+*.log
+npm-debug.log*
+server/data
+server/public/ads
+server/public/logo
+*.db
+*.db-wal
+*.db-shm
