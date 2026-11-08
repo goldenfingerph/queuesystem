@@ -76,7 +76,7 @@ export function createService(input: ServiceInput): number {
       if (overlap) throw new ServiceManagementError('RANGE_CONFLICT', 'This ticket number range overlaps another service. Choose a different range.');
       const info = db.prepare(
         'INSERT INTO services (name, name_ar, code, description, prefix, avg_duration_sec, ticket_range_start, ticket_range_end) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      ).run(name, nameAr, input.code!.toString().toUpperCase(), input.description ?? '', input.prefix.trim(), duration, start, end);
+      ).run(name, nameAr, (input.code as string).toUpperCase(), input.description ?? '', input.prefix.trim(), duration, start, end);
       db.prepare('INSERT INTO ticket_sequences (service_id, next_number) VALUES (?, 1)').run(info.lastInsertRowid);
       return info.lastInsertRowid;
     })());
