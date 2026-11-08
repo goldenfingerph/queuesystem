@@ -198,7 +198,7 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
       body: JSON.stringify({ username: 'rate-limit-account', password: 'wrong-password' }),
     });
     assert.equal(accountBlocked.status, 429);
-    assert.match(accountBlocked.headers.get('retry-after') ?? '', /^\\d+$/);
+    assert.ok(Number(accountBlocked.headers.get('retry-after')) > 0);
 
     // A second limit applies across different usernames from the same IP.
     // One earlier failed admin login plus the five above leaves 14 attempts.
@@ -216,7 +216,7 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
       body: JSON.stringify({ username: 'different-user-after-ip-limit', password: 'wrong-password' }),
     });
     assert.equal(ipBlocked.status, 429);
-    assert.match(ipBlocked.headers.get('retry-after') ?? '', /^\\d+$/);
+    assert.ok(Number(ipBlocked.headers.get('retry-after')) > 0);
   } finally {
     if (server) await new Promise<void>((resolve) => server!.close(() => resolve()));
     closeDb?.();
