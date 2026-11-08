@@ -24,13 +24,17 @@ jobs:
         run: npm install --package-lock-only --ignore-scripts
       - name: Install locked dependencies
         run: npm ci
+      - name: Apply compatible npm security fixes
+        run: npm audit fix
       - name: Report npm security audit details
         continue-on-error: true
         shell: pwsh
         run: |
           npm audit --json > npm-audit.json
           node -e "const a=JSON.parse(require('fs').readFileSync('npm-audit.json','utf8')); console.log('Vulnerability totals:', JSON.stringify(a.metadata?.vulnerabilities ?? {})); for (const [name,v] of Object.entries(a.vulnerabilities ?? {})) console.log(JSON.stringify({name,severity:v.severity,isDirect:v.isDirect,range:v.range,fixAvailable:v.fixAvailable,via:v.via.map(x=>typeof x==='string'?x:{name:x.name,title:x.title,url:x.url,range:x.range})}));"
-      - name: Upload regenerated lockfile for review
+      - name: Enforce clean npm security audit
+        run: npm audit
+      - name: Upload audited lockfile for review
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -38,8 +42,6 @@ jobs:
           path: package-lock.json
           if-no-files-found: error
           retention-days: 1
-      - name: Enforce clean npm security audit
-        run: npm audit
       - name: Type-check frontend and server
         run: npm run typecheck
       - name: Build production frontend
