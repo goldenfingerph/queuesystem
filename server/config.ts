@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -19,3 +21,60 @@ export const config = {
 } as const;
 
 export type ServerConfig = typeof config;
+
+/**
+ * Validate operator-supplied environment values before database migrations
+ * or first-run administrator initialization can change persistent state.
+ * This function deliberately validates paths without creating directories.
+ */
+export function validateServerEnvironment(values: NodeJS.ProcessEnv = process.env): void {
+  const errors: string[] = [];
+  const portText = values.PORT ?? '4000';
+  const port = Number(portText);
+  if (!/^\\d+$/.test(portText) || !Number.isInteger(port) || port < 1 || port > 65535) {
+    errors.push('PORT must be a whole number from 1 to 65535.');
+  }
+
+  const host = values.HOST ?? '0.0.0.0';
+  const hostname = host.endsWith('.') ? host.slice(0, -1) : host;
+  const validHostname = hostname.length > 0 && hostname.length <= 253 &&
+    hostname.split('.').every((label) => /^[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$/.test(label));
+  if (!host.trim() || host !== host.trim() || (net.isIP(host) === 0 && !validHostname)) {
+    errors.push('HOST must be a valid IP address or DNS hostname.');
+  }
+
+  for (const name of ['DB_PATH', 'ADS_DIR', 'LOGO_DIR', 'BACKUPS_DIR'] as const) {
+    const value = values[name];
+    if (value !== undefined && (!value.trim() || value.includes('\\0'))) {
+      errors.push(`${name} must be a non-empty valid path when configured.`);
+    }
+  }
+
+  const cert = values.TLS_CERT_FILE;
+  const key = values.TLS_KEY_FILE;
+  if ((cert === undefined) !== (key === undefined)) {
+    errors.push('TLS_CERT_FILE and TLS_KEY_FILE must be configured together.');
+  }
+  for (const [name, value] of [['TLS_CERT_FILE', cert], ['TLS_KEY_FILE', key]] as const) {
+    if (value !== undefined) {
+      if (!value.trim() || value.includes('\\0')) {
+        errors.push(`${name} must be a non-empty valid path when configured.`);
+        continue;
+      }
+      try {
+        fs.accessSync(path.resolve(value), fs.constants.R_OK);
+      } catch {
+        errors.push(`${name} points to a file that does not exist or cannot be read.`);
+      }
+    }
+  }
+
+  const bootstrapPassword = values.ADMIN_INITIAL_PASSWORD;
+  if (bootstrapPassword !== undefined && (bootstrapPassword.length < 12 || bootstrapPassword.length > 200)) {
+    errors.push('ADMIN_INITIAL_PASSWORD must be 12 to 200 characters when configured.');
+  }
+
+  if (errors.length > 0) {
+    throw new Error(`Invalid server environment configuration:\\n- ${errors.join('\\n- ')}`);
+  }
+}
