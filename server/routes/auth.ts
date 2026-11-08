@@ -47,7 +47,7 @@ export function authRouter(): Router {
       res.status(401).json({ error: 'Invalid credentials' });
       return;
     }
-    let passwordValid = verifyPassword(password, user.password_hash);
+    const passwordValid = verifyPassword(password, user.password_hash);
 
 
     if (!passwordValid) {
