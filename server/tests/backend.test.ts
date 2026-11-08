@@ -255,7 +255,7 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
     const analyticsResponse = await fetch(`http://127.0.0.1:${address.port}/api/reports/analytics?from=2026-11-08&to=2026-11-08`, {
       headers: { authorization: `Bearer ${token}` },
     });
-    assert.equal(analyticsResponse.status, 200, await analyticsResponse.text());
+    assert.equal(analyticsResponse.status, 200, await analyticsResponse.clone().text());
     const analytics = await analyticsResponse.json() as {
       from: string; to: string; totals: { total: number; completed: number };
       daily: Array<{ date: string; total: number }>;
