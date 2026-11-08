@@ -87,6 +87,19 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
     assert.equal(ticket.queued_for_counter_id, targetCounter);
     assert.equal(ticket.transfer_priority, 1);
 
+    // A bootstrap environment value must never authenticate after the database
+    // has already replaced its first-run admin password hash.
+    const previousBootstrapPassword = process.env.ADMIN_INITIAL_PASSWORD;
+    process.env.ADMIN_INITIAL_PASSWORD = 'test-bootstrap-password-that-must-not-work';
+    const bootstrapLogin = await fetch(`http://127.0.0.1:${address.port}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ username: 'admin', password: process.env.ADMIN_INITIAL_PASSWORD }),
+    });
+    assert.equal(bootstrapLogin.status, 401, await bootstrapLogin.text());
+    if (previousBootstrapPassword === undefined) delete process.env.ADMIN_INITIAL_PASSWORD;
+    else process.env.ADMIN_INITIAL_PASSWORD = previousBootstrapPassword;
+
     const admin = db.prepare("SELECT id FROM users WHERE username = 'admin'").get() as { id: number };
     const adminToken = middleware.createSession(admin.id);
 
