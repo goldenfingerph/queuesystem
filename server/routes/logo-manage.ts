@@ -5,6 +5,7 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { config } from '../config.js';
 import { getDb } from '../db/index.js';
+import { hasExpectedFileSignature } from '../lib/upload-validation.js';
 
 const allowed = new Set(['.png', '.jpg', '.jpeg', '.webp']);
 const upload = multer({
@@ -46,14 +47,27 @@ export function logoManageRouter(): Router {
     });
   }, (req, res) => {
     if (!req.file) { res.status(400).json({ error: 'Choose a PNG, JPG, or WebP image' }); return; }
-    const db = getDb();
-    const previous = db.prepare("SELECT value FROM system_settings WHERE key = 'logo_filename'").get() as { value: string } | undefined;
-    db.prepare("INSERT INTO system_settings (key, value, updated_at) VALUES ('logo_filename', ?, datetime('now')) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at")
-      .run(req.file.filename);
-    if (previous?.value && previous.value !== req.file.filename && previous.value === path.basename(previous.value) && /^logo-[a-f0-9-]+\.(png|jpg|jpeg|webp)$/.test(previous.value)) {
-      fs.rmSync(path.resolve(config.logoDir, previous.value), { force: true });
+    const extension = path.extname(req.file.originalname).toLowerCase();
+    let signatureValid = false;
+    try { signatureValid = hasExpectedFileSignature(req.file.path, extension); } catch { /* reject unreadable uploads */ }
+    if (!signatureValid) {
+      fs.rmSync(req.file.path, { force: true });
+      res.status(400).json({ error: 'Image content does not match its file format' }); return;
     }
-    res.json({ status: 'ok', logoUrl: '/api/media/logo/current' });
+    const db = getDb();
+    try {
+      const previous = db.prepare("SELECT value FROM system_settings WHERE key = 'logo_filename'").get() as { value: string } | undefined;
+      db.prepare("INSERT INTO system_settings (key, value, updated_at) VALUES ('logo_filename', ?, datetime('now')) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at")
+        .run(req.file.filename);
+      if (previous?.value && previous.value !== req.file.filename && previous.value === path.basename(previous.value) && /^logo-[a-f0-9-]+\\.(png|jpg|jpeg|webp)$/.test(previous.value)) {
+        fs.rmSync(path.resolve(config.logoDir, previous.value), { force: true });
+      }
+      res.json({ status: 'ok', logoUrl: '/api/media/logo/current' });
+    } catch {
+      fs.rmSync(req.file.path, { force: true });
+      res.status(500).json({ error: 'Could not save logo metadata' });
+    }
+    return;
   });
 
   router.delete('/', (_req, res) => {
