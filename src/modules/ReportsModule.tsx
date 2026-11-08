@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { BarChart3, Download, Calendar, Filter } from 'lucide-react';
 import { api } from '@/lib/api';
 import { AppLayout } from '@/components/AppLayout';
+import { getAbuDhabiBusinessDate } from '../../shared/business-date.js';
 
 interface Service { id: number; name: string }
 
@@ -14,15 +15,6 @@ interface ReportData {
   counterPerf: {
     number: number; name: string; total: number; completed: number; skipped: number; avg_service: number | null;
   }[];
-}
-
-function getAbuDhabiBusinessDate() {
-  const businessTime = new Date(Date.now() - 6 * 60 * 60 * 1000);
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Dubai', year: 'numeric', month: '2-digit', day: '2-digit',
-  }).formatToParts(businessTime);
-  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  return `${values.year}-${values.month}-${values.day}`;
 }
 
 export function ReportsModule() {
