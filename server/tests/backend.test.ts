@@ -19,7 +19,10 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
       import('../lib/middleware.js'),
     ]);
     closeDb = database.closeDb;
+    const firstRunPassword = 'test-first-run-admin-password';
+    process.env.ADMIN_INITIAL_PASSWORD = firstRunPassword;
     const db = database.getDb();
+    assert.equal(process.env.ADMIN_INITIAL_PASSWORD, undefined, 'bootstrap password must be cleared after initialization');
 
     const userResult = db.prepare(
       "INSERT INTO users (username, password_hash, display_name, role, is_active) VALUES (?, ?, ?, 'service_officer', 1)",
@@ -86,6 +89,13 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
     assert.equal(ticket.counter_id, null);
     assert.equal(ticket.queued_for_counter_id, targetCounter);
     assert.equal(ticket.transfer_priority, 1);
+
+    const firstRunLogin = await fetch(`http://127.0.0.1:${address.port}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ username: 'admin', password: firstRunPassword }),
+    });
+    assert.equal(firstRunLogin.status, 200, await firstRunLogin.text());
 
     // A bootstrap environment value must never authenticate after the database
     // has already replaced its first-run admin password hash.
