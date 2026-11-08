@@ -4,6 +4,17 @@ import os from 'node:os';
 import path from 'node:path';
 import http from 'node:http';
 import test from 'node:test';
+import { isAllowedWebSocketOrigin } from '../ws/index.js';
+
+test('WebSocket origin policy only accepts the matching transport origin and host', () => {
+  assert.equal(isAllowedWebSocketOrigin('http://queue.local:4000', 'queue.local:4000', false), true);
+  assert.equal(isAllowedWebSocketOrigin('https://queue.local:4000', 'queue.local:4000', true), true);
+  assert.equal(isAllowedWebSocketOrigin('https://queue.local:4000', 'queue.local:4000', false), false);
+  assert.equal(isAllowedWebSocketOrigin('http://queue.local:4000', 'queue.local:4000', true), false);
+  assert.equal(isAllowedWebSocketOrigin('https://attacker.example', 'queue.local:4000', true), false);
+  assert.equal(isAllowedWebSocketOrigin(undefined, 'queue.local:4000', false), false);
+  assert.equal(isAllowedWebSocketOrigin('not-an-origin', 'queue.local:4000', false), false);
+});
 
 test('assigned service officer can transfer a waiting ticket pinned to their counter', async () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'queuesystem-backend-'));
