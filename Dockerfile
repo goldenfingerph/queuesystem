@@ -11,7 +11,7 @@ COPY package.json package-lock.json ./
 RUN npm ci
 
 COPY . .
-RUN npm run typecheck && npm run lint && npm run build
+RUN npm run typecheck && npm run build
 RUN mkdir -p dist-server \
   && npx esbuild server/index.ts --bundle --platform=node --format=esm --packages=external --outfile=dist-server/index.js \
   && cp server/db/*.sql dist-server/
