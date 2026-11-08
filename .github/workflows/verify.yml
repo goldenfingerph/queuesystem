@@ -26,3 +26,5 @@ jobs:
         run: npm run typecheck
       - name: Build production frontend
         run: npm run build
+      - name: Test backup retention
+        run: npm run test:backup-retention
