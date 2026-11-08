@@ -20,6 +20,8 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - name: Regenerate lockfile from reviewed security overrides
+        run: npm install --package-lock-only --ignore-scripts
       - name: Install locked dependencies
         run: npm ci
       - name: Report npm security audit details
@@ -28,9 +30,6 @@ jobs:
         run: |
           npm audit --json > npm-audit.json
           node -e "const a=JSON.parse(require('fs').readFileSync('npm-audit.json','utf8')); console.log('Vulnerability totals:', JSON.stringify(a.metadata?.vulnerabilities ?? {})); for (const [name,v] of Object.entries(a.vulnerabilities ?? {})) console.log(JSON.stringify({name,severity:v.severity,isDirect:v.isDirect,range:v.range,fixAvailable:v.fixAvailable,via:v.via.map(x=>typeof x==='string'?x:{name:x.name,title:x.title,url:x.url,range:x.range})}));"
-      - name: Apply non-breaking npm security fixes
-        continue-on-error: true
-        run: npm audit fix
       - name: Upload regenerated lockfile for review
         if: always()
         uses: actions/upload-artifact@v4
