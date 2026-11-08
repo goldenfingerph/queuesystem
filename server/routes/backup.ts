@@ -3,6 +3,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { config } from '../config.js';
 import { getDb } from '../db/index.js';
+import { rotateBackups } from '../lib/backup-retention.js';
+
+const BACKUP_RETENTION_COUNT = 30;
 
 export function backupRouter(): Router {
   const router = Router();
@@ -19,7 +22,11 @@ export function backupRouter(): Router {
       const stat = fs.statSync(dest);
       db.prepare('INSERT INTO backups (filename, size_bytes, created_by) VALUES (?, ?, ?)')
         .run(filename, stat.size, req.user?.id ?? null);
-      res.json({ status: 'ok', filename, sizeBytes: stat.size });
+
+      // Rotation runs only after the new backup and its metadata are safely
+      // written. Failures pruning older files never invalidate this backup.
+      const rotated = rotateBackups(db, config.backupsDir, BACKUP_RETENTION_COUNT);
+      res.json({ status: 'ok', filename, sizeBytes: stat.size, retentionCount: BACKUP_RETENTION_COUNT, rotated });
     } catch (err) {
       if (dest && fs.existsSync(dest)) fs.rmSync(dest, { force: true });
       res.status(500).json({ status: 'error', message: err instanceof Error ? err.message : 'backup failed' });
@@ -29,7 +36,7 @@ export function backupRouter(): Router {
   router.get('/backups', (_req, res) => {
     try {
       const rows = getDb().prepare(
-        'SELECT id, filename, size_bytes, created_at FROM backups ORDER BY created_at DESC',
+        'SELECT id, filename, size_bytes, created_at FROM backups ORDER BY created_at DESC, id DESC',
       ).all();
       res.json({ status: 'ok', backups: rows });
     } catch (err) {
