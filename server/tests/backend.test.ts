@@ -260,7 +260,7 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
         ticket_range_end: 3999,
       }),
     });
-    assert.equal(createServiceResponse.status, 200, await createServiceResponse.text());
+    assert.equal(createServiceResponse.status, 200);
     const createdServiceData = await createServiceResponse.json() as { id: number };
     const createdServiceId = createdServiceData.id;
     assert.ok(Number.isInteger(createdServiceId) && createdServiceId > 0);
@@ -329,7 +329,7 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
       headers: serviceHeaders,
       body: JSON.stringify({ name: 'Updated Test Service', ticket_range_start: 4000, ticket_range_end: 4999 }),
     });
-    assert.equal(updateServiceResponse.status, 200, await updateServiceResponse.text());
+    assert.equal(updateServiceResponse.status, 200);
     const updatedServiceRow = db.prepare('SELECT name, ticket_range_start, ticket_range_end FROM services WHERE id = ?')
       .get(createdServiceId) as { name: string; ticket_range_start: number; ticket_range_end: number };
     assert.deepEqual(updatedServiceRow, {
