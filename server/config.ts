@@ -29,6 +29,8 @@ export type ServerConfig = typeof config;
  */
 export function validateServerEnvironment(values: NodeJS.ProcessEnv = process.env): void {
   const errors: string[] = [];
+  const nodeMajor = Number(process.versions.node.split('.')[0]);
+  if (nodeMajor !== 22) errors.push(`Node.js 22.x is required; found ${process.versions.node}.`);
   const portText = values.PORT ?? '4000';
   const port = Number(portText);
   if (!portText || String(port) !== portText || !Number.isInteger(port) || port < 1 || port > 65535) {
