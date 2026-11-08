@@ -113,7 +113,9 @@ export function reportsRouter(): Router {
     // CSV quoting alone does not prevent Excel/LibreOffice formula execution.
     const csvCell = (value: unknown): string => {
       let text = String(value ?? '');
-      if (/^[\u0000-\u0020]*[=+\-@]/.test(text)) text = `'${text}`;
+      let firstSignificant = 0;
+      while (firstSignificant < text.length && text.charCodeAt(firstSignificant) <= 0x20) firstSignificant += 1;
+      if ('=+-@'.includes(text[firstSignificant] ?? '\\0')) text = `'${text}`;
       return `"${text.replace(/"/g, '""')}"`;
     };
     const priorityArabic: Record<string, string> = {
