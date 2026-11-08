@@ -86,6 +86,22 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
     assert.equal(ticket.counter_id, null);
     assert.equal(ticket.queued_for_counter_id, targetCounter);
     assert.equal(ticket.transfer_priority, 1);
+
+    // Changing a service officer to a non-service-officer role must release
+    // their counter assignment so it cannot remain orphaned or block reuse.
+    const admin = db.prepare("SELECT id FROM users WHERE username = 'admin'").get() as { id: number };
+    const adminToken = middleware.createSession(admin.id);
+    const roleResponse = await fetch(`http://127.0.0.1:${address.port}/api/staff/${userId}`, {
+      method: 'PUT',
+      headers: {
+        authorization: `Bearer ${adminToken}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ role: 'senior_clerk' }),
+    });
+    assert.equal(roleResponse.status, 200, await roleResponse.text());
+    const assignment = db.prepare('SELECT status FROM staff_assignments WHERE user_id = ?').get(userId) as { status: string };
+    assert.equal(assignment.status, 'ended');
   } finally {
     if (server) await new Promise<void>((resolve) => server!.close(() => resolve()));
     closeDb?.();
