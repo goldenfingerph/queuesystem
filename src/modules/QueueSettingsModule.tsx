@@ -43,6 +43,12 @@ export function QueueSettingsModule() {
   };
 
   const saveAll = async () => {
+    if (categories.some((category) => !category.label_en.trim() || !category.label_ar.trim() || category.label_en.trim().length > 100 || category.label_ar.trim().length > 100 || !Number.isSafeInteger(category.priority_rank) || category.priority_rank < 1 || category.priority_rank > 9999)) {
+      setSavedMsg('Each visitor category needs English and Arabic labels (1–100 characters) and a whole-number priority rank from 1 to 9,999.');
+      return;
+    }
+    const padding = Number(settings.ticket_padding ?? '3');
+    if (!Number.isInteger(padding) || padding < 1 || padding > 6) { setSavedMsg('Ticket number padding must be a whole number from 1 to 6.'); return; }
     setSaving(true);
     setSavedMsg('');
     try {
@@ -95,15 +101,15 @@ export function QueueSettingsModule() {
                 <div className="grid flex-1 grid-cols-2 gap-3 sm:grid-cols-4">
                   <div>
                     <label className="mb-1 block text-xs font-medium text-navy-400">Label (EN)</label>
-                    <input className="input-field !py-1.5" value={cat.label_en} onChange={(e) => updateCategory(cat.id, { label_en: e.target.value })} />
+                    <input className="input-field !py-1.5" maxLength={100} value={cat.label_en} onChange={(e) => updateCategory(cat.id, { label_en: e.target.value })} />
                   </div>
                   <div>
                     <label className="mb-1 block text-xs font-medium text-navy-400">Label (AR)</label>
-                    <input className="input-field !py-1.5" dir="rtl" value={cat.label_ar} onChange={(e) => updateCategory(cat.id, { label_ar: e.target.value })} />
+                    <input className="input-field !py-1.5" dir="rtl" maxLength={100} value={cat.label_ar} onChange={(e) => updateCategory(cat.id, { label_ar: e.target.value })} />
                   </div>
                   <div>
                     <label className="mb-1 block text-xs font-medium text-navy-400">Priority Rank</label>
-                    <input type="number" className="input-field !py-1.5" value={cat.priority_rank} onChange={(e) => updateCategory(cat.id, { priority_rank: Number(e.target.value) })} />
+                    <input type="number" min="1" max="9999" step="1" className="input-field !py-1.5" value={cat.priority_rank} onChange={(e) => updateCategory(cat.id, { priority_rank: Number(e.target.value) })} />
                   </div>
                   <div className="flex items-end gap-2">
                     <label className="flex items-center gap-2 text-sm text-navy-700">
@@ -122,7 +128,7 @@ export function QueueSettingsModule() {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <label className="mb-1 block text-xs font-medium text-navy-400">Ticket Number Padding</label>
-              <input type="number" className="input-field" value={settings.ticket_padding ?? '3'} onChange={(e) => setSettings({ ...settings, ticket_padding: e.target.value })} />
+              <input type="number" min="1" max="6" step="1" className="input-field" value={settings.ticket_padding ?? '3'} onChange={(e) => setSettings({ ...settings, ticket_padding: e.target.value })} />
               <p className="mt-1 text-xs text-navy-300">e.g. 3 = 001, 002</p>
             </div>
             <div>
