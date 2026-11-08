@@ -13,10 +13,11 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
   let closeDb: (() => void) | undefined;
 
   try {
-    const [{ createApp }, database, middleware] = await Promise.all([
+    const [{ createApp }, database, middleware, auth] = await Promise.all([
       import('../app.js'),
       import('../db/index.js'),
       import('../lib/middleware.js'),
+      import('../lib/auth.js'),
     ]);
     closeDb = database.closeDb;
     const firstRunPassword = 'test-first-run-admin-password';
@@ -58,10 +59,23 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
     ).run(ticketId);
 
     const token = middleware.createSession(userId);
+    const storedSession = db.prepare('SELECT token FROM sessions WHERE user_id = ?').get(userId) as { token: string };
+    assert.equal(storedSession.token, auth.hashToken(token), 'SQLite must store only the token digest');
     server = http.createServer(createApp());
     await new Promise<void>((resolve) => server!.listen(0, '127.0.0.1', resolve));
     const address = server.address();
     assert.ok(address && typeof address !== 'string');
+    // Existing pre-upgrade raw sessions remain valid and are hashed on first use.
+    const legacyToken = 'a'.repeat(64);
+    db.prepare('INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)').run(legacyToken, userId, auth.sessionExpiry());
+    const legacyResponse = await fetch(`http://127.0.0.1:${address.port}/api/auth/me`, {
+      headers: { authorization: `Bearer ${legacyToken}` },
+    });
+    assert.equal(legacyResponse.status, 200, await legacyResponse.text());
+    const migratedLegacySession = db.prepare('SELECT token FROM sessions WHERE user_id = ? AND token = ?')
+      .get(userId, auth.hashToken(legacyToken));
+    assert.ok(migratedLegacySession, 'legacy session should be upgraded to a token digest');
+
     const response = await fetch(`http://127.0.0.1:${address.port}/api/tickets/transfer`, {
       method: 'POST',
       headers: {
