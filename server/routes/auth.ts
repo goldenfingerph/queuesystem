@@ -120,7 +120,7 @@ export function authRouter(): Router {
     }
     const currentToken = req.headers.authorization!.slice(7);
     const updatePassword = db.transaction(() => {
-      db.prepare('UPDATE users SET password_hash = ?, updated_at = datetime(\\'now\\') WHERE id = ?')
+      db.prepare("UPDATE users SET password_hash = ?, updated_at = datetime('now') WHERE id = ?")
         .run(hashPassword(newPassword), req.user!.id);
       // Keep this device signed in, but expire every other session for the account.
       db.prepare("UPDATE sessions SET expires_at = datetime('now') WHERE user_id = ? AND token <> ?")
