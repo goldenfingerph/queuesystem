@@ -96,7 +96,7 @@ export function ticketsRouter(): Router {
       priorityRank = vc.priority_rank;
     }
 
-    const day = businessDate();
+    const day = getBusinessDate();
     const ticket = db.transaction(() => {
       const ticketNumber = allocateNumber(Number(service_id), svc.ticket_range_start, svc.ticket_range_end, day);
       if (!ticketNumber) return null;
