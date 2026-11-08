@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { AuthProvider, useAuth } from '@/lib/auth-context';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { ROLE_PERMISSIONS, type ModuleId, type StaffRole } from '@/types/domain';
 import { LoginPage } from '@/modules/LoginPage';
 import { DashboardModule } from '@/modules/DashboardModule';
@@ -81,8 +82,10 @@ function Router() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <Router />
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <Router />
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }
