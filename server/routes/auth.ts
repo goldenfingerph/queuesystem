@@ -58,7 +58,7 @@ export function authRouter(): Router {
 
     // Express does not trust forwarded IP headers by default. Use the socket
     // address as a fallback so clients cannot bypass the limit with X-Forwarded-For.
-    const ip = req.ip || req.socket.remoteAddress || 'unknown';
+    const ip = req.socket.remoteAddress || req.ip || 'unknown';
     const key = loginKey(ip, username);
     const now = Date.now();
     pruneExpired(failedLogins, now);
