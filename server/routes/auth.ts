@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { getDb } from '../db/index.js';
-import { verifyPassword, hashPassword } from '../lib/auth.js';
+import { verifyPassword } from '../lib/auth.js';
 import { authMiddleware, createSession, destroySession, type AuthUser } from '../lib/middleware.js';
 
 export function authRouter(): Router {
@@ -49,21 +49,6 @@ export function authRouter(): Router {
     }
     let passwordValid = verifyPassword(password, user.password_hash);
 
-    // Secure first-run recovery: the operator supplies a one-time password
-    // through the Windows environment. It is immediately replaced by bcrypt.
-    const bootstrapPassword = process.env.ADMIN_INITIAL_PASSWORD;
-    if (
-      !passwordValid &&
-      user.username === 'admin' &&
-      typeof bootstrapPassword === 'string' &&
-      bootstrapPassword.length >= 12 &&
-      password === bootstrapPassword
-    ) {
-      const newHash = hashPassword(password);
-      db.prepare("UPDATE users SET password_hash = ?, updated_at = datetime('now') WHERE id = ?")
-        .run(newHash, user.id);
-      passwordValid = true;
-    }
 
     if (!passwordValid) {
       recordLoginFailure(key);
