@@ -2,7 +2,6 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
 const env = process.env;
 
 export const config = {
@@ -14,6 +13,9 @@ export const config = {
   adsDir: env.ADS_DIR ?? path.resolve(__dirname, 'public', 'ads'),
   logoDir: env.LOGO_DIR ?? path.resolve(__dirname, 'public', 'logo'),
   backupsDir: env.BACKUPS_DIR ?? path.resolve(__dirname, 'data', 'backups'),
+  // Configure both paths to serve HTTPS and secure WebSockets (WSS).
+  tlsCertFile: env.TLS_CERT_FILE ? path.resolve(env.TLS_CERT_FILE) : null,
+  tlsKeyFile: env.TLS_KEY_FILE ? path.resolve(env.TLS_KEY_FILE) : null,
 } as const;
 
 export type ServerConfig = typeof config;
