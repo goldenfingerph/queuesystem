@@ -319,7 +319,9 @@ export function ticketsRouter(): Router {
       res.status(400).json({ error: 'Ticket is already assigned to the selected counter' }); return;
     }
 
-    if (!canOperateCounter(user_id, req.user?.role, ticket.counter_id)) { res.status(403).json({ error: 'You are not assigned to the ticket counter' }); return; }
+    // A waiting transferred ticket has no current counter_id; use its pinned
+    // queued_for_counter_id to verify the service officer's assignment.
+    if (!canOperateCounter(user_id, req.user?.role, currentCounterId)) { res.status(403).json({ error: 'You are not assigned to the ticket counter' }); return; }
     const targetSvc = db.prepare('SELECT * FROM services WHERE id = ? AND is_active = 1').get(to_service_id) as { id: number; prefix: string; ticket_range_start: number; ticket_range_end: number } | undefined;
     if (!targetSvc) { res.status(404).json({ error: 'Target service not found or inactive' }); return; }
     const targetCounter = db.prepare('SELECT id FROM counters WHERE id = ? AND is_active = 1').get(to_counter_id);
