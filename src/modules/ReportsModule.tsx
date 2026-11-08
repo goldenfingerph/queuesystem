@@ -33,6 +33,7 @@ export function ReportsModule() {
   }, []);
 
   useEffect(() => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(Date.parse(`${date}T00:00:00`))) { setError('Choose a valid report date.'); setLoading(false); return; }
     let cancelled = false;
     setLoading(true);
     setError('');
@@ -48,6 +49,7 @@ export function ReportsModule() {
   }, [date, serviceId, retryCount]);
 
   const exportCsv = async () => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(Date.parse(`${date}T00:00:00`))) { setError('Choose a valid report date before exporting.'); return; }
     const params = new URLSearchParams({ date });
     if (serviceId) params.set('serviceId', serviceId);
     const token = sessionStorage.getItem('infinity_token');
