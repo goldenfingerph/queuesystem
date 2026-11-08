@@ -30,3 +30,6 @@ server/public/ads/
 *.db
 *.db-wal
 *.db-shm
+
+# Private TLS certificate and key files must never be committed.
+server/certs/
