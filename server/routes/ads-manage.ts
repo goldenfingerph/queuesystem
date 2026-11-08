@@ -26,8 +26,7 @@ const upload = multer({
   }),
   fileFilter: (_req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
-    const validMime = ['video/mp4', 'video/webm', 'video/ogg', 'application/ogg'].includes(file.mimetype);
-    cb(null, allowed.has(ext) && validMime);
+    cb(null, allowedMimeTypes[ext]?.includes(file.mimetype) ?? false);
   },
   limits: { fileSize: 250 * 1024 * 1024, files: 1, fields: 1, parts: 2, fieldSize: 128 },
 });
