@@ -182,18 +182,25 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
       method: 'POST', headers: { authorization: `Bearer ${adminToken}` }, body: fakeLogoForm,
     });
     assert.equal(fakeLogo.status, 400, 'image content must match its extension');
+
+    const oversizedLogoForm = new FormData();
+    oversizedLogoForm.append('logo', new Blob([new Uint8Array(5 * 1024 * 1024 + 1)], { type: 'image/png' }), 'oversized.png');
+    const oversizedLogo = await fetch(`http://127.0.0.1:${address.port}/api/logo/upload`, {
+      method: 'POST', headers: { authorization: `Bearer ${adminToken}` }, body: oversizedLogoForm,
+    });
+    assert.equal(oversizedLogo.status, 413, 'logo size limit must be enforced before content validation');
     assert.equal(db.prepare("SELECT value FROM system_settings WHERE key = 'logo_filename'").get() && (db.prepare("SELECT value FROM system_settings WHERE key = 'logo_filename'").get() as { value: string }).value, logoRecord.value, 'rejected uploads must not replace the current logo');
 
     const mp4Header = Buffer.from([0, 0, 0, 24, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d, 0, 0, 2, 0]);
     const videoForm = new FormData();
-    videoForm.append('video', new Blob([mp4Header], { type: 'video/mp4' }), 'sample.mp4');
+    videoForm.append('video', new Blob([mp4Header], { type: 'video/mp4' }), '..\\..\\sample.mp4');
     const validVideo = await fetch(`http://127.0.0.1:${address.port}/api/ads/upload`, {
       method: 'POST', headers: { authorization: `Bearer ${adminToken}` }, body: videoForm,
     });
     assert.equal(validVideo.status, 200, await validVideo.text());
     const storedAd = db.prepare('SELECT filename, original_name FROM ads ORDER BY id DESC LIMIT 1').get() as { filename: string; original_name: string };
     assert.match(storedAd.filename, /^ad-[a-f0-9-]+\.mp4$/);
-    assert.equal(storedAd.original_name, 'sample.mp4');
+    assert.equal(storedAd.original_name, 'sample.mp4', 'client-supplied path segments must not be stored');
 
     const fakeVideoForm = new FormData();
     fakeVideoForm.append('video', new Blob(['not a video'], { type: 'video/mp4' }), 'fake.mp4');
