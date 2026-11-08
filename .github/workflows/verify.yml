@@ -1,4 +1,5 @@
 name: Verify local LAN queue system
+run-name: Verify ${{ github.event_name }} on ${{ github.ref_name }}
 
 on:
   push:
@@ -49,7 +50,7 @@ jobs:
           name: audited-package-lock
           path: package-lock.json
           if-no-files-found: error
-          retention-days: 1
+          retention-days: 7
       - name: Type-check frontend and server
         run: npm run typecheck
       - name: Build production frontend
