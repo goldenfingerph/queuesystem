@@ -252,6 +252,43 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
     assert.equal(secondPageData.pagination.hasNextPage, false);
     assert.equal(secondPageData.pagination.hasPreviousPage, true);
 
+    const analyticsResponse = await fetch(`http://127.0.0.1:${address.port}/api/reports/analytics?from=2026-11-08&to=2026-11-08`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    assert.equal(analyticsResponse.status, 200, await analyticsResponse.text());
+    const analytics = await analyticsResponse.json() as {
+      from: string; to: string; totals: { total: number; completed: number };
+      daily: Array<{ date: string; total: number }>;
+      byService: Array<{ serviceId: number; total: number }>;
+      hourly: Array<{ hour: number; total: number }>;
+    };
+    assert.equal(analytics.from, '2026-11-08');
+    assert.equal(analytics.to, '2026-11-08');
+    assert.equal(analytics.totals.total, 3, 'analytics totals must include all tickets in the business-date range');
+    assert.equal(analytics.totals.completed, 2);
+    assert.deepEqual(analytics.daily, [{ date: '2026-11-08', total: 3, completed: 2, skipped: 0 }]);
+    assert.equal(analytics.byService[0]?.serviceId, sourceService);
+    assert.equal(analytics.byService[0]?.total, 3);
+    assert.ok(analytics.hourly.some((bucket) => bucket.hour === 8 && bucket.total === 1));
+    assert.ok(analytics.hourly.some((bucket) => bucket.hour === 9 && bucket.total === 1));
+
+    const reversedAnalyticsRange = await fetch(`http://127.0.0.1:${address.port}/api/reports/analytics?from=2026-11-09&to=2026-11-08`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    assert.equal(reversedAnalyticsRange.status, 400);
+    const oversizedAnalyticsRange = await fetch(`http://127.0.0.1:${address.port}/api/reports/analytics?from=2026-01-01&to=2026-04-01`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    assert.equal(oversizedAnalyticsRange.status, 400);
+    const invalidAnalyticsDate = await fetch(`http://127.0.0.1:${address.port}/api/reports/analytics?from=2026-02-30&to=2026-03-01`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    assert.equal(invalidAnalyticsDate.status, 400);
+    const invalidAnalyticsService = await fetch(`http://127.0.0.1:${address.port}/api/reports/analytics?from=2026-11-08&to=2026-11-08&serviceId=invalid`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    assert.equal(invalidAnalyticsService.status, 400);
+
     const filteredTicketPage = await fetch(`http://127.0.0.1:${address.port}/api/tickets?status=completed&serviceId=${sourceService}&page=2&limit=1`, {
       headers: { authorization: `Bearer ${token}` },
     });
