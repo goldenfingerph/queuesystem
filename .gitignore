@@ -21,6 +21,8 @@ dist-ssr
 *.sln
 *.sw?
 .env
+.env.*
+!.env.example
 
 # Local server data (SQLite database, backups, uploaded MP4 ads)
 server/data/
