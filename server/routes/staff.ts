@@ -130,6 +130,10 @@ export function staffRouter(): Router {
         db.prepare(`UPDATE users SET ${sets.join(', ')} WHERE id = ?`).run(...vals);
         if (!nextActive) {
           db.prepare("UPDATE sessions SET expires_at = datetime('now') WHERE user_id = ?").run(id);
+        }
+        // Only service officers may hold counter assignments. End any existing
+        // assignment when the account is deactivated or its role changes away.
+        if (!nextActive || nextRole !== 'service_officer') {
           db.prepare("UPDATE staff_assignments SET status = 'ended', ended_at = datetime('now') WHERE user_id = ? AND status IN ('active','break')").run(id);
         }
       });
