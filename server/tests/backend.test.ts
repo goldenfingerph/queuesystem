@@ -181,6 +181,42 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
     assert.equal(roleResponse.status, 200, await roleResponse.text());
     const assignment = db.prepare('SELECT status FROM staff_assignments WHERE user_id = ?').get(userId) as { status: string };
     assert.equal(assignment.status, 'ended');
+
+    // Five failures for one username block that account/IP pair and return a
+    // Retry-After hint without revealing whether the username exists.
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const failed = await fetch(`http://127.0.0.1:${address.port}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ username: 'rate-limit-account', password: 'wrong-password' }),
+      });
+      assert.equal(failed.status, 401);
+    }
+    const accountBlocked = await fetch(`http://127.0.0.1:${address.port}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ username: 'rate-limit-account', password: 'wrong-password' }),
+    });
+    assert.equal(accountBlocked.status, 429);
+    assert.match(accountBlocked.headers.get('retry-after') ?? '', /^\\d+$/);
+
+    // A second limit applies across different usernames from the same IP.
+    // One earlier failed admin login plus the five above leaves 14 attempts.
+    for (let attempt = 0; attempt < 14; attempt += 1) {
+      const failed = await fetch(`http://127.0.0.1:${address.port}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ username: `ip-limit-${attempt}`, password: 'wrong-password' }),
+      });
+      assert.equal(failed.status, 401);
+    }
+    const ipBlocked = await fetch(`http://127.0.0.1:${address.port}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ username: 'different-user-after-ip-limit', password: 'wrong-password' }),
+    });
+    assert.equal(ipBlocked.status, 429);
+    assert.match(ipBlocked.headers.get('retry-after') ?? '', /^\\d+$/);
   } finally {
     if (server) await new Promise<void>((resolve) => server!.close(() => resolve()));
     closeDb?.();
