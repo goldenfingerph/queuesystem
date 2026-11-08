@@ -15,7 +15,6 @@ interface WaitingTicket {
 interface Ad { id: number; filename: string; is_active: number; sort_order: number }
 
 export function TvDisplayModule() {
-  const [currentTickets, setCurrentTickets] = useState<CalledTicket[]>([]);
   const [latestTicket, setLatestTicket] = useState<CalledTicket | null>(null);
   const [currentlyServing, setCurrentlyServing] = useState<CalledTicket[]>([]);
   const [waitingTickets, setWaitingTickets] = useState<WaitingTicket[]>([]);
@@ -52,7 +51,6 @@ export function TvDisplayModule() {
   const loadTvQueue = () => {
     api.get<{ currentTickets: CalledTicket[]; latestTicket: CalledTicket | null; currentlyServing: CalledTicket[]; waitingTickets: WaitingTicket[] }>('/tv/queue')
       .then((r) => {
-        setCurrentTickets(r.currentTickets ?? []);
         setLatestTicket(r.latestTicket ?? null);
         setCurrentlyServing(r.currentlyServing ?? []);
         setWaitingTickets(r.waitingTickets ?? []);
@@ -185,7 +183,6 @@ export function TvDisplayModule() {
       for (let attempt = 0; attempt < 5; attempt++) {
         try {
           const result = await api.get<{ currentTickets: CalledTicket[]; latestTicket: CalledTicket | null; currentlyServing: CalledTicket[]; waitingTickets: WaitingTicket[] }>('/tv/queue');
-          setCurrentTickets(result.currentTickets ?? []);
           setLatestTicket(result.latestTicket ?? null);
           setCurrentlyServing(result.currentlyServing ?? []);
           setWaitingTickets(result.waitingTickets ?? []);
@@ -213,6 +210,16 @@ export function TvDisplayModule() {
 
 
   const activeAds = adsEnabled ? ads.filter((a) => a.is_active) : [];
+
+  // Rotate ads at the configured interval even when a video is longer than
+  // the selected display interval. Shorter videos still advance on onEnded.
+  useEffect(() => {
+    if (!playing || activeAds.length < 2) return;
+    const timer = window.setTimeout(() => {
+      setCurrentAd((previous) => (previous + 1) % activeAds.length);
+    }, adsIntervalSec * 1000);
+    return () => window.clearTimeout(timer);
+  }, [activeAds.length, adsIntervalSec, currentAd, playing]);
 
   return (
     <div className="flex h-screen flex-col bg-navy-950 text-white">
