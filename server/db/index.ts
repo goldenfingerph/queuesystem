@@ -12,9 +12,11 @@ function secureDefaultAdminPassword(db: Database.Database): void {
   const admin = db.prepare('SELECT id, password_hash FROM users WHERE username = ?').get('admin') as
     | { id: number; password_hash: string }
     | undefined;
-  if (!admin || admin.password_hash !== KNOWN_DEFAULT_ADMIN_HASH) return;
-
   const configuredPassword = process.env.ADMIN_INITIAL_PASSWORD;
+  if (!admin || admin.password_hash !== KNOWN_DEFAULT_ADMIN_HASH) {
+    delete process.env.ADMIN_INITIAL_PASSWORD;
+    return;
+  }
   const oneTimePassword = typeof configuredPassword === 'string' && configuredPassword.length >= 12
     ? configuredPassword
     : crypto.randomBytes(18).toString('base64url');
@@ -30,6 +32,8 @@ function secureDefaultAdminPassword(db: Database.Database): void {
     console.log('  Save this password now, then change it after login.');
     console.log('=================================================\n');
   }
+  // The bootstrap value is a one-time input; do not retain it in process memory.
+  delete process.env.ADMIN_INITIAL_PASSWORD;
 }
 
 export type DB = Database.Database;
