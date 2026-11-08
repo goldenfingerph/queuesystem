@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.server.json",
     "server": "tsx server/index.ts",
     "start": "npm run build && npm run server",
-    "db:restore": "tsx server/scripts/restore-backup.ts"
+    "db:restore": "tsx server/scripts/restore-backup.ts",
+    "test:backup-retention": "tsx --test server/lib/backup-retention.test.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.118.0",
