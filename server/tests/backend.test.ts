@@ -8,9 +8,53 @@ import Database from 'better-sqlite3';
 import { isAllowedWebSocketOrigin } from '../ws/index.js';
 import { hasSupportedFileSignature } from '../lib/upload-validation.js';
 import { rotateBackups } from '../lib/backup-retention.js';
+import { pruneQueueEvents } from '../lib/queue-event-retention.js';
 import { getBusinessDate } from '../../shared/business-date.js';
 
 
+
+
+test('queue event retention prunes only aged terminal-ticket history and keeps each final event', () => {
+  const db = new Database(':memory:');
+  try {
+    db.exec(`
+      CREATE TABLE tickets (id INTEGER PRIMARY KEY, status TEXT NOT NULL, business_date TEXT NOT NULL);
+      CREATE TABLE queue_events (
+        id INTEGER PRIMARY KEY,
+        ticket_id INTEGER NOT NULL,
+        event_type TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      );
+    `);
+    db.prepare('INSERT INTO tickets (id, status, business_date) VALUES (?, ?, ?)').run(1, 'completed', '2024-01-01');
+    db.prepare('INSERT INTO tickets (id, status, business_date) VALUES (?, ?, ?)').run(2, 'waiting', '2024-01-01');
+    db.prepare('INSERT INTO tickets (id, status, business_date) VALUES (?, ?, ?)').run(3, 'completed', '2026-10-01');
+    const event = db.prepare('INSERT INTO queue_events (ticket_id, event_type, created_at) VALUES (?, ?, ?)');
+    event.run(1, 'created', '2024-01-01 08:00:00');
+    event.run(1, 'called', '2024-01-01 08:05:00');
+    event.run(1, 'completed', '2024-01-01 08:10:00');
+    event.run(2, 'created', '2024-01-01 08:00:00');
+    event.run(2, 'called', '2024-01-01 08:05:00');
+    event.run(3, 'created', '2026-10-01 08:00:00');
+    event.run(3, 'completed', '2026-10-01 08:10:00');
+
+    assert.equal(pruneQueueEvents(db, 365, new Date('2026-11-08T12:00:00.000Z')), 2);
+    const remaining = db.prepare('SELECT ticket_id, event_type FROM queue_events ORDER BY id').all() as {
+      ticket_id: number; event_type: string;
+    }[];
+    assert.deepEqual(remaining, [
+      { ticket_id: 1, event_type: 'completed' },
+      { ticket_id: 2, event_type: 'created' },
+      { ticket_id: 2, event_type: 'called' },
+      { ticket_id: 3, event_type: 'created' },
+      { ticket_id: 3, event_type: 'completed' },
+    ]);
+    assert.throws(() => pruneQueueEvents(db, 29), /30 to 3650/);
+    assert.throws(() => pruneQueueEvents(db, 365, new Date(Number.NaN)), /valid current date/);
+  } finally {
+    db.close();
+  }
+});
 
 test('backup rotation keeps newest regular backups and preserves restore safety copies', () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'queuesystem-backup-retention-'));
@@ -91,6 +135,7 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
     assert.throws(() => serverConfig.validateServerEnvironment({ HOST: 'bad host' }), /HOST must be a valid/);
     assert.throws(() => serverConfig.validateServerEnvironment({ TLS_CERT_FILE: 'server.crt' }), /TLS_CERT_FILE and TLS_KEY_FILE/);
     assert.throws(() => serverConfig.validateServerEnvironment({ ADMIN_INITIAL_PASSWORD: 'short' }), /ADMIN_INITIAL_PASSWORD must be 12 to 200/);
+    assert.throws(() => serverConfig.validateServerEnvironment({ QUEUE_EVENT_RETENTION_DAYS: '10' }), /QUEUE_EVENT_RETENTION_DAYS must be a whole number from 30 to 3650/);
     const firstRunPassword = 'test-first-run-admin-password';
     process.env.ADMIN_INITIAL_PASSWORD = firstRunPassword;
     const db = database.getDb();
