@@ -5,6 +5,7 @@ import path from 'node:path';
 import http from 'node:http';
 import test from 'node:test';
 import { isAllowedWebSocketOrigin } from '../ws/index.js';
+import { hasSupportedFileSignature } from '../lib/upload-validation.js';
 
 test('WebSocket origin policy only accepts the matching transport origin and host', () => {
   assert.equal(isAllowedWebSocketOrigin('http://queue.local:4000', 'queue.local:4000', false), true);
@@ -19,6 +20,8 @@ test('WebSocket origin policy only accepts the matching transport origin and hos
 test('assigned service officer can transfer a waiting ticket pinned to their counter', async () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'queuesystem-backend-'));
   process.env.DB_PATH = path.join(directory, 'test.db');
+  process.env.ADS_DIR = path.join(directory, 'uploads', 'ads');
+  process.env.LOGO_DIR = path.join(directory, 'uploads', 'logo');
 
   let server: http.Server | undefined;
   let closeDb: (() => void) | undefined;
@@ -149,6 +152,72 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
     const admin = db.prepare("SELECT id FROM users WHERE username = 'admin'").get() as { id: number };
     const adminToken = middleware.createSession(admin.id);
 
+    // Upload mutations require an authenticated admin session.
+    const unauthenticatedUpload = await fetch(`http://127.0.0.1:${address.port}/api/logo/upload`, {
+      method: 'POST',
+      body: (() => { const form = new FormData(); form.append('logo', new Blob([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])], { type: 'image/png' }), 'unauthorized.png'); return form; })(),
+    });
+    assert.equal(unauthenticatedUpload.status, 401);
+
+    const pngHeader = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    const logoForm = new FormData();
+    logoForm.append('logo', new Blob([pngHeader], { type: 'image/png' }), 'brand.png');
+    const validLogo = await fetch(`http://127.0.0.1:${address.port}/api/logo/upload`, {
+      method: 'POST', headers: { authorization: `Bearer ${adminToken}` }, body: logoForm,
+    });
+    assert.equal(validLogo.status, 200, await validLogo.text());
+    const logoRecord = db.prepare("SELECT value FROM system_settings WHERE key = 'logo_filename'").get() as { value: string };
+    assert.match(logoRecord.value, /^logo-[a-f0-9-]+\.png$/);
+
+    const spoofedLogoForm = new FormData();
+    spoofedLogoForm.append('logo', new Blob([pngHeader], { type: 'image/jpeg' }), 'spoofed.png');
+    const spoofedLogo = await fetch(`http://127.0.0.1:${address.port}/api/logo/upload`, {
+      method: 'POST', headers: { authorization: `Bearer ${adminToken}` }, body: spoofedLogoForm,
+    });
+    assert.equal(spoofedLogo.status, 400, 'MIME type and extension must agree');
+
+    const fakeLogoForm = new FormData();
+    fakeLogoForm.append('logo', new Blob(['<script>alert(1)</script>'], { type: 'image/png' }), 'fake.png');
+    const fakeLogo = await fetch(`http://127.0.0.1:${address.port}/api/logo/upload`, {
+      method: 'POST', headers: { authorization: `Bearer ${adminToken}` }, body: fakeLogoForm,
+    });
+    assert.equal(fakeLogo.status, 400, 'image content must match its extension');
+    assert.equal(db.prepare("SELECT value FROM system_settings WHERE key = 'logo_filename'").get() && (db.prepare("SELECT value FROM system_settings WHERE key = 'logo_filename'").get() as { value: string }).value, logoRecord.value, 'rejected uploads must not replace the current logo');
+
+    const mp4Header = Buffer.from([0, 0, 0, 24, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d, 0, 0, 2, 0]);
+    const videoForm = new FormData();
+    videoForm.append('video', new Blob([mp4Header], { type: 'video/mp4' }), 'sample.mp4');
+    const validVideo = await fetch(`http://127.0.0.1:${address.port}/api/ads/upload`, {
+      method: 'POST', headers: { authorization: `Bearer ${adminToken}` }, body: videoForm,
+    });
+    assert.equal(validVideo.status, 200, await validVideo.text());
+    const storedAd = db.prepare('SELECT filename, original_name FROM ads ORDER BY id DESC LIMIT 1').get() as { filename: string; original_name: string };
+    assert.match(storedAd.filename, /^ad-[a-f0-9-]+\.mp4$/);
+    assert.equal(storedAd.original_name, 'sample.mp4');
+
+    const fakeVideoForm = new FormData();
+    fakeVideoForm.append('video', new Blob(['not a video'], { type: 'video/mp4' }), 'fake.mp4');
+    const fakeVideo = await fetch(`http://127.0.0.1:${address.port}/api/ads/upload`, {
+      method: 'POST', headers: { authorization: `Bearer ${adminToken}` }, body: fakeVideoForm,
+    });
+    assert.equal(fakeVideo.status, 400, 'video content must match its extension');
+    assert.equal(db.prepare('SELECT COUNT(*) AS count FROM ads').get() && (db.prepare('SELECT COUNT(*) AS count FROM ads').get() as { count: number }).count, 1, 'rejected video must not create advertisement metadata');
+
+    const signatureDirectory = path.join(directory, 'signature-tests');
+    fs.mkdirSync(signatureDirectory, { recursive: true });
+    const signatureCases = [
+      ['valid.webp', Buffer.from('RIFF0000WEBP'), 'image', '.webp', true],
+      ['invalid.webp', Buffer.from('RIFF0000NOPE'), 'image', '.webp', false],
+      ['valid.webm', Buffer.from([0x1a, 0x45, 0xdf, 0xa3]), 'video', '.webm', true],
+      ['valid.ogg', Buffer.from('OggS'), 'video', '.ogg', true],
+      ['invalid.mp4', Buffer.from('plain text'), 'video', '.mp4', false],
+    ] as const;
+    for (const [name, bytes, kind, extension, expected] of signatureCases) {
+      const target = path.join(signatureDirectory, name);
+      fs.writeFileSync(target, bytes);
+      assert.equal(hasSupportedFileSignature(target, kind, extension), expected, name);
+    }
+
     // A transferred waiting ticket is still pinned to the target counter.
     // Disabling or deleting that counter must not silently unpin the ticket.
     const disableResponse = await fetch(`http://127.0.0.1:${address.port}/api/counters/${targetCounter}`, {
@@ -221,6 +290,8 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
     if (server) await new Promise<void>((resolve) => server!.close(() => resolve()));
     closeDb?.();
     delete process.env.DB_PATH;
+    delete process.env.ADS_DIR;
+    delete process.env.LOGO_DIR;
     fs.rmSync(directory, { recursive: true, force: true });
   }
 });
