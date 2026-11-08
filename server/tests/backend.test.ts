@@ -231,6 +231,166 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
     const admin = db.prepare("SELECT id FROM users WHERE username = 'admin'").get() as { id: number };
     const adminToken = middleware.createSession(admin.id);
 
+    // Service-management API and database regression coverage.
+    const serviceHeaders = {
+      authorization: `Bearer ${adminToken}`,
+      'content-type': 'application/json',
+    };
+    const serviceListResponse = await fetch(`http://127.0.0.1:${address.port}/api/services`, {
+      headers: { authorization: `Bearer ${adminToken}` },
+    });
+    assert.equal(serviceListResponse.status, 200);
+    const serviceListData = await serviceListResponse.json() as {
+      services: { id: number; code: string; assigned_counters: number }[];
+    };
+    assert.ok(serviceListData.services.some((service) => service.id === sourceService && service.assigned_counters === 1));
+    assert.ok(serviceListData.services.some((service) => service.id === targetService && service.assigned_counters === 1));
+
+    const createServiceResponse = await fetch(`http://127.0.0.1:${address.port}/api/services`, {
+      method: 'POST',
+      headers: serviceHeaders,
+      body: JSON.stringify({
+        name: 'Test Service',
+        name_ar: 'خدمة الاختبار',
+        code: 'TST',
+        prefix: 'X',
+        description: 'Service-layer integration fixture',
+        avg_duration_sec: 240,
+        ticket_range_start: 3000,
+        ticket_range_end: 3999,
+      }),
+    });
+    assert.equal(createServiceResponse.status, 200, await createServiceResponse.text());
+    const createdServiceData = await createServiceResponse.json() as { id: number };
+    const createdServiceId = createdServiceData.id;
+    assert.ok(Number.isInteger(createdServiceId) && createdServiceId > 0);
+    const createdServiceRow = db.prepare(
+      'SELECT name, name_ar, code, prefix, avg_duration_sec, ticket_range_start, ticket_range_end FROM services WHERE id = ?',
+    ).get(createdServiceId) as {
+      name: string; name_ar: string; code: string; prefix: string; avg_duration_sec: number;
+      ticket_range_start: number; ticket_range_end: number;
+    };
+    assert.deepEqual(createdServiceRow, {
+      name: 'Test Service',
+      name_ar: 'خدمة الاختبار',
+      code: 'TST',
+      prefix: 'X',
+      avg_duration_sec: 240,
+      ticket_range_start: 3000,
+      ticket_range_end: 3999,
+    });
+    assert.ok(db.prepare('SELECT service_id FROM ticket_sequences WHERE service_id = ?').get(createdServiceId),
+      'creating a service must create its ticket sequence in the same transaction');
+
+    const invalidServiceCreate = await fetch(`http://127.0.0.1:${address.port}/api/services`, {
+      method: 'POST',
+      headers: serviceHeaders,
+      body: JSON.stringify({
+        name: ' ',
+        name_ar: 'خدمة',
+        code: 'BAD',
+        prefix: 'B',
+        ticket_range_start: 5000,
+        ticket_range_end: 5999,
+      }),
+    });
+    assert.equal(invalidServiceCreate.status, 400);
+
+    const duplicateServiceCode = await fetch(`http://127.0.0.1:${address.port}/api/services`, {
+      method: 'POST',
+      headers: serviceHeaders,
+      body: JSON.stringify({
+        name: 'Duplicate Code',
+        name_ar: 'رمز مكرر',
+        code: 'SRC',
+        prefix: 'D',
+        ticket_range_start: 5000,
+        ticket_range_end: 5999,
+      }),
+    });
+    assert.equal(duplicateServiceCode.status, 409);
+
+    const overlappingServiceRange = await fetch(`http://127.0.0.1:${address.port}/api/services`, {
+      method: 'POST',
+      headers: serviceHeaders,
+      body: JSON.stringify({
+        name: 'Overlapping Range',
+        name_ar: 'نطاق متداخل',
+        code: 'OVR',
+        prefix: 'O',
+        ticket_range_start: 1200,
+        ticket_range_end: 1299,
+      }),
+    });
+    assert.equal(overlappingServiceRange.status, 409);
+
+    const updateServiceResponse = await fetch(`http://127.0.0.1:${address.port}/api/services/${createdServiceId}`, {
+      method: 'PUT',
+      headers: serviceHeaders,
+      body: JSON.stringify({ name: 'Updated Test Service', ticket_range_start: 4000, ticket_range_end: 4999 }),
+    });
+    assert.equal(updateServiceResponse.status, 200, await updateServiceResponse.text());
+    const updatedServiceRow = db.prepare('SELECT name, ticket_range_start, ticket_range_end FROM services WHERE id = ?')
+      .get(createdServiceId) as { name: string; ticket_range_start: number; ticket_range_end: number };
+    assert.deepEqual(updatedServiceRow, {
+      name: 'Updated Test Service',
+      ticket_range_start: 4000,
+      ticket_range_end: 4999,
+    });
+
+    const duplicateServiceUpdate = await fetch(`http://127.0.0.1:${address.port}/api/services/${createdServiceId}`, {
+      method: 'PUT',
+      headers: serviceHeaders,
+      body: JSON.stringify({ code: 'TGT' }),
+    });
+    assert.equal(duplicateServiceUpdate.status, 409);
+
+    const overlappingServiceUpdate = await fetch(`http://127.0.0.1:${address.port}/api/services/${createdServiceId}`, {
+      method: 'PUT',
+      headers: serviceHeaders,
+      body: JSON.stringify({ ticket_range_start: 1000, ticket_range_end: 1100 }),
+    });
+    assert.equal(overlappingServiceUpdate.status, 409);
+    const rangeAfterRejectedUpdate = db.prepare('SELECT ticket_range_start, ticket_range_end FROM services WHERE id = ?')
+      .get(createdServiceId) as { ticket_range_start: number; ticket_range_end: number };
+    assert.deepEqual(rangeAfterRejectedUpdate, { ticket_range_start: 4000, ticket_range_end: 4999 },
+      'a rejected overlapping update must leave the existing range unchanged');
+
+    const missingServiceUpdate = await fetch(`http://127.0.0.1:${address.port}/api/services/999999`, {
+      method: 'PUT',
+      headers: serviceHeaders,
+      body: JSON.stringify({ name: 'Missing' }),
+    });
+    assert.equal(missingServiceUpdate.status, 404);
+
+    const invalidServiceIdUpdate = await fetch(`http://127.0.0.1:${address.port}/api/services/not-a-number`, {
+      method: 'PUT',
+      headers: serviceHeaders,
+      body: JSON.stringify({ name: 'Invalid ID' }),
+    });
+    assert.equal(invalidServiceIdUpdate.status, 400);
+
+    const deleteServiceWithTickets = await fetch(`http://127.0.0.1:${address.port}/api/services/${sourceService}`, {
+      method: 'DELETE',
+      headers: { authorization: `Bearer ${adminToken}` },
+    });
+    assert.equal(deleteServiceWithTickets.status, 409);
+    assert.ok(db.prepare('SELECT id FROM services WHERE id = ?').get(sourceService),
+      'service history must remain intact when deletion is rejected');
+
+    const deleteCreatedService = await fetch(`http://127.0.0.1:${address.port}/api/services/${createdServiceId}`, {
+      method: 'DELETE',
+      headers: { authorization: `Bearer ${adminToken}` },
+    });
+    assert.equal(deleteCreatedService.status, 200);
+    assert.equal(db.prepare('SELECT id FROM services WHERE id = ?').get(createdServiceId), undefined);
+
+    const deleteMissingService = await fetch(`http://127.0.0.1:${address.port}/api/services/999999`, {
+      method: 'DELETE',
+      headers: { authorization: `Bearer ${adminToken}` },
+    });
+    assert.equal(deleteMissingService.status, 404);
+
     // Upload mutations require an authenticated admin session.
     const unauthenticatedUpload = await fetch(`http://127.0.0.1:${address.port}/api/logo/upload`, {
       method: 'POST',
