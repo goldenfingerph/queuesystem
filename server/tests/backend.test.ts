@@ -55,7 +55,7 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
     ).run(ticketId);
 
     const token = middleware.createSession(userId);
-    server = http.createServer(createApp.createApp());
+    server = http.createServer(createApp());
     await new Promise<void>((resolve) => server!.listen(0, '127.0.0.1', resolve));
     const address = server.address();
     assert.ok(address && typeof address !== 'string');
