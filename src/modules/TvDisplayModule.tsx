@@ -69,6 +69,13 @@ export function TvDisplayModule() {
   }, []);
 
   const handleVoiceButton = async () => {
+    // Once browser audio has been unlocked, the same control toggles announcements.
+    if (audioUnlocked && voiceEnabled) {
+      if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+      setVoiceEnabled(false);
+      return;
+    }
+
     // This must run directly from the user's click so browsers can unlock audio.
     try {
       let context = audioContextRef.current;
@@ -235,7 +242,7 @@ export function TvDisplayModule() {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <button onClick={handleVoiceButton} className="rounded-lg bg-white/10 p-2 hover:bg-white/20" title={audioUnlocked ? "Toggle voice" : "Enable voice announcements"}>
+          <button onClick={handleVoiceButton} className="rounded-lg bg-white/10 p-2 hover:bg-white/20" title={audioUnlocked && voiceEnabled ? "Disable voice announcements" : "Enable voice announcements"}>
             {voiceEnabled ? <Volume2 className="h-5 w-5" /> : <VolumeX className="h-5 w-5" />}
           </button>
           <button onClick={() => setPlaying(!playing)} className="rounded-lg bg-white/10 p-2 hover:bg-white/20" title="Toggle ads">
