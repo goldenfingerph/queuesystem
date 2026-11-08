@@ -62,20 +62,29 @@ export function countersRouter(): Router {
     if (sets.length === 0) { res.status(400).json({ error: 'No fields to update' }); return; }
     sets.push("updated_at = datetime('now')");
     vals.push(id);
-    if (!db.prepare('SELECT id FROM counters WHERE id = ?').get(Number(id))) { res.status(404).json({ error: 'Counter not found' }); return; }
     try {
-      if (is_active === false || is_active === 0) {
-        const inUse = db.prepare(
-          `SELECT
-             (SELECT COUNT(*) FROM staff_assignments WHERE counter_id = ? AND status IN ('active', 'break')) +
-             (SELECT COUNT(*) FROM tickets WHERE counter_id = ? AND status IN ('called', 'serving')) AS n`,
-        ).get(Number(id), Number(id)) as { n: number };
-        if (inUse.n > 0) {
-          res.status(409).json({ error: 'Cannot disable a counter while staff are assigned or a ticket is being served. End the assignment and complete or transfer the active ticket first.' });
-          return;
+      // Serialize the usage check and update with ticket transfers/calls so a
+      // counter cannot be disabled while it has a pinned waiting ticket.
+      const updateCounter = db.transaction(() => {
+        if (!db.prepare('SELECT id FROM counters WHERE id = ?').get(Number(id))) return 'not-found';
+        if (is_active === false || is_active === 0) {
+          const inUse = db.prepare(
+            `SELECT
+               (SELECT COUNT(*) FROM staff_assignments WHERE counter_id = ? AND status IN ('active', 'break')) +
+               (SELECT COUNT(*) FROM tickets WHERE counter_id = ? AND status IN ('called', 'serving')) +
+               (SELECT COUNT(*) FROM tickets WHERE queued_for_counter_id = ? AND status = 'waiting') AS n`,
+          ).get(Number(id), Number(id), Number(id)) as { n: number };
+          if (inUse.n > 0) return 'in-use';
         }
+        const result = db.prepare(`UPDATE counters SET ${sets.join(', ')} WHERE id = ?`).run(...vals);
+        return result.changes === 1 ? 'ok' : 'not-found';
+      });
+      const outcome = updateCounter.immediate();
+      if (outcome === 'not-found') { res.status(404).json({ error: 'Counter not found' }); return; }
+      if (outcome === 'in-use') {
+        res.status(409).json({ error: 'Cannot disable a counter while staff are assigned, a ticket is being served, or a transferred ticket is waiting for it. End the assignment or move the waiting ticket first.' });
+        return;
       }
-      db.prepare(`UPDATE counters SET ${sets.join(', ')} WHERE id = ?`).run(...vals);
       broadcast('counters-updated', {});
       res.json({ status: 'ok' });
     } catch (err) {
