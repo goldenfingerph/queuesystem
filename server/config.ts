@@ -14,9 +14,6 @@ export const config = {
   adsDir: env.ADS_DIR ?? path.resolve(__dirname, 'public', 'ads'),
   logoDir: env.LOGO_DIR ?? path.resolve(__dirname, 'public', 'logo'),
   backupsDir: env.BACKUPS_DIR ?? path.resolve(__dirname, 'data', 'backups'),
-  corsOrigin: env.CORS_ORIGIN ?? '*',
-  // JWT/signing secret placeholder — auth module lands in a later stage.
-  jwtSecret: env.JWT_SECRET ?? 'infinity-local-dev-secret-change-me',
 } as const;
 
 export type ServerConfig = typeof config;
