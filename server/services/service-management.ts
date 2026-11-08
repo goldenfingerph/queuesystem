@@ -66,6 +66,7 @@ export function createService(input: ServiceInput): number {
   if (!Number.isInteger(duration) || duration < 1 || duration > 86400) {
     throw new ServiceManagementError('VALIDATION', 'Average duration must be between 1 and 86400 seconds');
   }
+  const prefix = input.prefix.trim();
   const { start, end } = validateRange(input.ticket_range_start, input.ticket_range_end);
   const db = getDb();
   try {
@@ -76,7 +77,7 @@ export function createService(input: ServiceInput): number {
       if (overlap) throw new ServiceManagementError('RANGE_CONFLICT', 'This ticket number range overlaps another service. Choose a different range.');
       const info = db.prepare(
         'INSERT INTO services (name, name_ar, code, description, prefix, avg_duration_sec, ticket_range_start, ticket_range_end) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      ).run(name, nameAr, (input.code as string).toUpperCase(), input.description ?? '', input.prefix.trim(), duration, start, end);
+      ).run(name, nameAr, (input.code as string).toUpperCase(), input.description ?? '', prefix, duration, start, end);
       db.prepare('INSERT INTO ticket_sequences (service_id, next_number) VALUES (?, 1)').run(info.lastInsertRowid);
       return info.lastInsertRowid;
     })());
