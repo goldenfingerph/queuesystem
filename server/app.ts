@@ -105,9 +105,9 @@ export function createApp(): Express {
     if (req.method !== 'GET' || req.path.startsWith('/api/') || req.path === '/health' || req.path === '/ws') return next();
     res.sendFile(path.join(webRoot, 'index.html'), (err) => { if (err) next(err); });
   });
-  app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
+  app.use((err: unknown, _req: Request, res: Response, next: NextFunction) => {
     console.error('[http] request failed:', err);
-    if (res.headersSent) return;
+    if (res.headersSent) return next(err);
     res.status(500).json({ error: 'An unexpected server error occurred. Check the server console for details.' });
   });
   return app;
