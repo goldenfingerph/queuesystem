@@ -27,8 +27,7 @@ const upload = multer({
   }),
   fileFilter: (_req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
-    const validMime = ['image/png', 'image/jpeg', 'image/webp'].includes(file.mimetype);
-    cb(null, allowed.has(ext) && validMime);
+    cb(null, allowedMimeTypes[ext] === file.mimetype);
   },
   limits: { fileSize: 5 * 1024 * 1024, files: 1, fields: 0, parts: 1 },
 });
