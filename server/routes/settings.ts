@@ -7,7 +7,17 @@ export function settingsRouter(): Router {
 
   router.get('/', (_req, res) => {
     const db = getDb();
-    const rows = db.prepare('SELECT key, value FROM system_settings').all() as { key: string; value: string }[];
+    // Only expose settings required by the public welcome/reception/TV UI.
+    // Other system_settings rows may contain internal operational values.
+    const publicKeys = [
+      'ticket_padding', 'queue_mode', 'ads_enabled', 'ads_interval_sec',
+      'language', 'org_name_en', 'org_name_ar', 'tv_recent_calls',
+      'voice_enabled', 'bell_enabled', 'display_theme',
+    ];
+    const placeholders = publicKeys.map(() => '?').join(', ');
+    const rows = db.prepare(
+      `SELECT key, value FROM system_settings WHERE key IN (${placeholders})`,
+    ).all(...publicKeys) as { key: string; value: string }[];
     const settings: Record<string, string> = {};
     for (const r of rows) settings[r.key] = r.value;
     res.json({ settings });
