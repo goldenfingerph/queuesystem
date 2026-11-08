@@ -24,6 +24,8 @@ export function TvDisplayModule() {
   const [adsIntervalSec, setAdsIntervalSec] = useState(15);
   // Advertisements are intentionally always muted so queue announcements remain audible.
   const [voiceEnabled, setVoiceEnabled] = useState(true);
+  const voiceEnabledRef = useRef(voiceEnabled);
+  voiceEnabledRef.current = voiceEnabled;
   const [bellEnabled, setBellEnabled] = useState(true);
   const [currentAd, setCurrentAd] = useState(0);
   const [playing, setPlaying] = useState(true);
@@ -71,6 +73,7 @@ export function TvDisplayModule() {
   const handleVoiceButton = async () => {
     // Once browser audio has been unlocked, the same control toggles announcements.
     if (audioUnlocked && voiceEnabled) {
+      voiceEnabledRef.current = false;
       if ('speechSynthesis' in window) window.speechSynthesis.cancel();
       setVoiceEnabled(false);
       return;
@@ -98,6 +101,7 @@ export function TvDisplayModule() {
       }
 
       setAudioUnlocked(true);
+      voiceEnabledRef.current = true;
       setVoiceEnabled(true);
       if ('speechSynthesis' in window) {
         window.speechSynthesis.cancel();
@@ -150,8 +154,9 @@ export function TvDisplayModule() {
       // Browser speechSynthesis cannot be routed through Web Audio for true reverb,
       // so this quietly repeats the destination phrase once to create a subtle hall-like tail.
       utter.onend = () => {
+        if (!voiceEnabledRef.current) return;
         window.setTimeout(() => {
-          if (!('speechSynthesis' in window)) return;
+          if (!voiceEnabledRef.current || !('speechSynthesis' in window)) return;
           const echo = new SpeechSynthesisUtterance(
             `Please proceed to counter ${ticket.counter_number}.`
           );
