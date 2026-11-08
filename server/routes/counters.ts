@@ -97,18 +97,25 @@ export function countersRouter(): Router {
     const { id } = req.params;
     const db = getDb();
     if (!Number.isInteger(Number(id)) || Number(id) < 1) { res.status(400).json({ error: 'Invalid counter ID' }); return; }
-    const exists = db.prepare('SELECT id FROM counters WHERE id = ?').get(Number(id));
-    if (!exists) { res.status(404).json({ error: 'Counter not found' }); return; }
-    const history = db.prepare(
-      `SELECT (SELECT COUNT(*) FROM tickets WHERE counter_id = ?) +
-              (SELECT COUNT(*) FROM queue_events WHERE counter_id = ?) +
-              (SELECT COUNT(*) FROM staff_assignments WHERE counter_id = ?) AS n`,
-    ).get(id, id, id) as { n: number };
-    if (history.n > 0) {
-      res.status(409).json({ error: 'Cannot delete a counter with ticket or staff history. Disable it instead.' });
+    const deleteCounter = db.transaction(() => {
+      const exists = db.prepare('SELECT id FROM counters WHERE id = ?').get(Number(id));
+      if (!exists) return 'not-found';
+      const history = db.prepare(
+        `SELECT (SELECT COUNT(*) FROM tickets WHERE counter_id = ?) +
+                (SELECT COUNT(*) FROM tickets WHERE queued_for_counter_id = ?) +
+                (SELECT COUNT(*) FROM queue_events WHERE counter_id = ?) +
+                (SELECT COUNT(*) FROM staff_assignments WHERE counter_id = ?) AS n`,
+      ).get(id, id, id, id) as { n: number };
+      if (history.n > 0) return 'has-history';
+      db.prepare('DELETE FROM counters WHERE id = ?').run(id);
+      return 'ok';
+    });
+    const outcome = deleteCounter.immediate();
+    if (outcome === 'not-found') { res.status(404).json({ error: 'Counter not found' }); return; }
+    if (outcome === 'has-history') {
+      res.status(409).json({ error: 'Cannot delete a counter with ticket or staff history, including transferred tickets waiting for it. Disable it instead.' });
       return;
     }
-    db.prepare('DELETE FROM counters WHERE id = ?').run(id);
     broadcast('counters-updated', {});
     res.json({ status: 'ok' });
   });
