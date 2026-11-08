@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { getDb } from '../db/index.js';
-import { verifyPassword } from '../lib/auth.js';
+import { hashToken, hashPassword, verifyPassword } from '../lib/auth.js';
 import { authMiddleware, createSession, destroySession, type AuthUser } from '../lib/middleware.js';
 
 export function authRouter(): Router {
@@ -95,7 +95,7 @@ export function authRouter(): Router {
         .run(hashPassword(newPassword), req.user!.id);
       // Keep this device signed in, but expire every other session for the account.
       db.prepare("UPDATE sessions SET expires_at = datetime('now') WHERE user_id = ? AND token <> ?")
-        .run(req.user!.id, currentToken);
+        .run(req.user!.id, hashToken(currentToken));
     });
     updatePassword();
     res.json({ status: 'ok' });
