@@ -15,38 +15,6 @@ import { getBusinessDate } from '../../shared/business-date.js';
 
 
 
-test('PWA manifest, service worker, and icon are served by the production app shell', async () => {
-  const { createApp } = await import('../app.js');
-  const server = http.createServer(createApp());
-  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
-  const address = server.address();
-  assert.ok(address && typeof address !== 'string');
-
-  try {
-    const [manifestResponse, workerResponse, iconResponse, pageResponse] = await Promise.all([
-      fetch(`http://127.0.0.1:${address.port}/manifest.webmanifest`),
-      fetch(`http://127.0.0.1:${address.port}/sw.js`),
-      fetch(`http://127.0.0.1:${address.port}/pwa-icon.svg`),
-      fetch(`http://127.0.0.1:${address.port}/`),
-    ]);
-    assert.equal(manifestResponse.status, 200);
-    const manifest = await manifestResponse.json() as { start_url: string; display: string; icons: Array<{ src: string }> };
-    assert.equal(manifest.start_url, '/#/');
-    assert.equal(manifest.display, 'standalone');
-    assert.equal(manifest.icons[0]?.src, '/pwa-icon.svg');
-    assert.equal(workerResponse.status, 200);
-    const worker = await workerResponse.text();
-    assert.match(worker, /startsWith\('\/api\/'\)/);
-    assert.match(worker, /request\.mode === 'navigate'/);
-    assert.equal(iconResponse.status, 200);
-    assert.match(await iconResponse.text(), /<svg/);
-    assert.equal(pageResponse.status, 200);
-    assert.match(await pageResponse.text(), /rel="manifest"/);
-  } finally {
-    await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
-  }
-});
-
 test('queue event retention prunes only aged terminal-ticket history and keeps each final event', () => {
   const db = new Database(':memory:');
   try {
@@ -220,6 +188,26 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
     await new Promise<void>((resolve) => server!.listen(0, '127.0.0.1', resolve));
     const address = server.address();
     assert.ok(address && typeof address !== 'string');
+
+    const [manifestResponse, workerResponse, iconResponse, pageResponse] = await Promise.all([
+      fetch(`http://127.0.0.1:${address.port}/manifest.webmanifest`),
+      fetch(`http://127.0.0.1:${address.port}/sw.js`),
+      fetch(`http://127.0.0.1:${address.port}/pwa-icon.svg`),
+      fetch(`http://127.0.0.1:${address.port}/`),
+    ]);
+    assert.equal(manifestResponse.status, 200);
+    const manifest = await manifestResponse.json() as { start_url: string; display: string; icons: Array<{ src: string }> };
+    assert.equal(manifest.start_url, '/#/');
+    assert.equal(manifest.display, 'standalone');
+    assert.equal(manifest.icons[0]?.src, '/pwa-icon.svg');
+    assert.equal(workerResponse.status, 200);
+    const worker = await workerResponse.text();
+    assert.match(worker, /startsWith\\('\/api\\/'\\)/);
+    assert.match(worker, /request\\.mode === 'navigate'/);
+    assert.equal(iconResponse.status, 200);
+    assert.match(await iconResponse.text(), /<svg/);
+    assert.equal(pageResponse.status, 200);
+    assert.match(await pageResponse.text(), /rel="manifest"/);
     // Existing pre-upgrade raw sessions remain valid and are hashed on first use.
     const legacyToken = 'a'.repeat(64);
     db.prepare('INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)').run(legacyToken, userId, auth.sessionExpiry());
