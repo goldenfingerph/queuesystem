@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { BarChart3, Download, Calendar, Filter } from 'lucide-react';
 import { api } from '@/lib/api';
 import { AppLayout } from '@/components/AppLayout';
+import { getBusinessDate } from '../../shared/business-date';
 
 interface Service { id: number; name: string }
 
@@ -16,18 +17,9 @@ interface ReportData {
   }[];
 }
 
-function getAbuDhabiBusinessDate() {
-  const businessTime = new Date(Date.now() - 6 * 60 * 60 * 1000);
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Dubai', year: 'numeric', month: '2-digit', day: '2-digit',
-  }).formatToParts(businessTime);
-  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  return `${values.year}-${values.month}-${values.day}`;
-}
-
 export function ReportsModule() {
   const [services, setServices] = useState<Service[]>([]);
-  const [date, setDate] = useState(getAbuDhabiBusinessDate);
+  const [date, setDate] = useState(getBusinessDate);
   const [serviceId, setServiceId] = useState('');
   const [data, setData] = useState<ReportData | null>(null);
   const [loading, setLoading] = useState(true);
