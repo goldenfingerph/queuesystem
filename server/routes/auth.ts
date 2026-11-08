@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { getDb } from '../db/index.js';
-import { hashToken, verifyPassword } from '../lib/auth.js';
+import { hashPassword, hashToken, verifyPassword } from '../lib/auth.js';
 import { authMiddleware, createSession, destroySession, type AuthUser } from '../lib/middleware.js';
 
 export function authRouter(): Router {
