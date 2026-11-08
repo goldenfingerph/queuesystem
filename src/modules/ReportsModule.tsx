@@ -63,7 +63,7 @@ export function ReportsModule() {
   }, [date, serviceId, retryCount]);
 
   useEffect(() => {
-    if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(fromDate) || !/^\\d{4}-\\d{2}-\\d{2}$/.test(toDate)) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(fromDate) || !/^\d{4}-\d{2}-\d{2}$/.test(toDate)) {
       setAnalyticsError('Choose valid start and end dates.');
       setAnalytics(null);
       return;
