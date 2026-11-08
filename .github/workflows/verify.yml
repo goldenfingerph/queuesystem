@@ -26,3 +26,5 @@ jobs:
         run: npm run typecheck
       - name: Build production frontend
         run: npm run build
+      - name: Test queue event retention
+        run: npm run test:queue-event-retention
