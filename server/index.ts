@@ -18,6 +18,7 @@ import { settingsRouter } from './routes/settings.js';
 import { reportsRouter } from './routes/reports.js';
 import { adsManageRouter } from './routes/ads-manage.js';
 import { authMiddleware } from './lib/middleware.js';
+import { pruneQueueEvents, QUEUE_EVENT_RETENTION_INTERVAL_MS } from './lib/queue-event-retention.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -39,7 +40,23 @@ function gracefulShutdown(server: http.Server, signal: string): void {
 async function start(): Promise<void> {
   const { createApp } = await import('./app.js');
   const app = createApp();
-  getDb(); // Run migrations and initialize the first administrator before accepting LAN traffic.
+  const db = getDb(); // Run migrations and initialize the first administrator before accepting LAN traffic.
+
+  const runQueueEventRetention = () => {
+    try {
+      const result = pruneQueueEvents(db);
+      if (result.deleted > 0) {
+        console.log(`[maintenance] pruned ${result.deleted} queue events older than ${result.retentionDays} days`);
+      }
+    } catch (error) {
+      // Maintenance failure must not prevent the queue server from starting or serving traffic.
+      console.warn('[maintenance] queue event retention failed:', error);
+    }
+  };
+  runQueueEventRetention();
+  const retentionTimer = setInterval(runQueueEventRetention, QUEUE_EVENT_RETENTION_INTERVAL_MS);
+  retentionTimer.unref();
+
   console.log('[server] database ready at', config.dbPath);
 
   const server = http.createServer(app);
