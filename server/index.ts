@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import http from 'node:http';
 import https from 'node:https';
-import { config } from './config.js';
+import { config, validateServerEnvironment } from './config.js';
 import { getDb, closeDb } from './db/index.js';
 import { initWs, closeWs } from './ws/index.js';
 
@@ -38,12 +38,14 @@ function gracefulShutdown(server: QueueServer, signal: string): void {
 }
 
 async function start(): Promise<void> {
+  // Fail before opening SQLite or running migrations if the operator's
+  // environment, certificate pair, or configured paths are invalid.
+  validateServerEnvironment();
   const { createApp } = await import('./app.js');
   const app = createApp();
+  const server = createQueueServer(app);
   getDb(); // Run migrations and initialize the first administrator before accepting LAN traffic.
   console.log('[server] database ready at', config.dbPath);
-
-  const server = createQueueServer(app);
   initWs(server);
   const protocol = server instanceof https.Server ? 'https' : 'http';
   const wsProtocol = protocol === 'https' ? 'wss' : 'ws';
