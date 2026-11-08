@@ -46,6 +46,7 @@ function connect() {
     wsRef = socket;
 
     socket.onopen = () => {
+      if (wsRef !== socket) return;
       reconnectAttempts = 0;
       if (reconnectTimer) {
         clearTimeout(reconnectTimer);
@@ -55,6 +56,7 @@ function connect() {
     };
 
     socket.onmessage = (e) => {
+      if (wsRef !== socket) return;
       try {
         const msg = JSON.parse(e.data) as WsMessage;
         listeners.forEach((fn) => fn(msg));
@@ -62,12 +64,14 @@ function connect() {
     };
 
     socket.onclose = () => {
-      if (wsRef === socket) wsRef = null;
+      if (wsRef !== socket) return;
+      wsRef = null;
       updateConnectionStatus('disconnected');
       scheduleReconnect();
     };
 
     socket.onerror = () => {
+      if (wsRef !== socket) return;
       // Closing this specific socket lets onclose schedule the next attempt.
       socket.close();
     };
