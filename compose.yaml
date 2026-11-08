@@ -1,0 +1,35 @@
+services:
+  queuesystem:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: infinity-queuesystem:local
+    container_name: infinity-queuesystem
+    restart: unless-stopped
+    ports:
+      - "${PORT_BINDING:-4000}:4000"
+    environment:
+      NODE_ENV: production
+      PORT: "4000"
+      HOST: 0.0.0.0
+      DB_PATH: /data/infinity.db
+      BACKUPS_DIR: /backups
+      ADS_DIR: /ads
+      LOGO_DIR: /logo
+      ADMIN_INITIAL_PASSWORD: ${ADMIN_INITIAL_PASSWORD:-}
+    volumes:
+      - queue_data:/data
+      - queue_backups:/backups
+      - queue_ads:/ads
+      - queue_logo:/logo
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+volumes:
+  queue_data:
+  queue_backups:
+  queue_ads:
+  queue_logo:
