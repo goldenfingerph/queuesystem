@@ -34,32 +34,54 @@ export function ticketsRouter(): Router {
   // List tickets with filters
   router.get('/', (req, res) => {
     const db = getDb();
-    const status = req.query.status as string | undefined;
-    const serviceId = req.query.serviceId as string | undefined;
+    const status = typeof req.query.status === 'string' ? req.query.status : undefined;
+    const serviceId = typeof req.query.serviceId === 'string' ? req.query.serviceId : undefined;
     const rawLimit = req.query.limit === undefined ? 100 : Number(req.query.limit);
     const limit = Number.isInteger(rawLimit) && rawLimit >= 1 ? Math.min(rawLimit, 500) : 100;
+    const rawPage = req.query.page === undefined ? 1 : Number(req.query.page);
+    if (!Number.isSafeInteger(rawPage) || rawPage < 1) {
+      res.status(400).json({ error: 'Page must be a positive whole number' }); return;
+    }
+    const page = rawPage;
+    const offset = (page - 1) * limit;
+    if (!Number.isSafeInteger(offset)) {
+      res.status(400).json({ error: 'Requested page is out of range' }); return;
+    }
     const allowedStatuses = new Set(['waiting', 'called', 'serving', 'completed', 'no_show', 'transferred']);
-    if (status && !allowedStatuses.has(status)) {
+    if (req.query.status !== undefined && (!status || !allowedStatuses.has(status))) {
       res.status(400).json({ error: 'Invalid ticket status filter' }); return;
     }
-    if (serviceId && (!Number.isInteger(Number(serviceId)) || Number(serviceId) < 1)) {
+    if (req.query.serviceId !== undefined && (!serviceId || !Number.isInteger(Number(serviceId)) || Number(serviceId) < 1)) {
       res.status(400).json({ error: 'Invalid service ID filter' }); return;
     }
     const where: string[] = [];
     const params: unknown[] = [];
     if (status) { where.push('t.status = ?'); params.push(status); }
-    if (serviceId) { where.push('t.service_id = ?'); params.push(serviceId); }
+    if (serviceId) { where.push('t.service_id = ?'); params.push(Number(serviceId)); }
+    const whereSql = where.length ? 'WHERE ' + where.join(' AND ') : '';
+    const total = (db.prepare(`SELECT COUNT(*) AS total FROM tickets t ${whereSql}`)
+      .get(...params) as { total: number }).total;
     const sql = `SELECT t.*, s.name AS service_name, s.prefix AS service_prefix,
        c.number AS counter_number, vc.label_en AS category_label, vc.label_ar AS category_label_ar
        FROM tickets t
        LEFT JOIN services s ON s.id = t.service_id
        LEFT JOIN counters c ON c.id = t.counter_id
        LEFT JOIN visitor_categories vc ON vc.id = t.visitor_category_id
-       ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
-       ORDER BY t.created_at DESC LIMIT ?`;
-    params.push(limit);
-    const rows = db.prepare(sql).all(...params);
-    res.json({ tickets: rows });
+       ${whereSql}
+       ORDER BY t.created_at DESC, t.id DESC LIMIT ? OFFSET ?`;
+    const rows = db.prepare(sql).all(...params, limit, offset);
+    const totalPages = Math.ceil(total / limit);
+    res.json({
+      tickets: rows,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1 && total > 0,
+      },
+    });
   });
 
   // Generate a new ticket (reception)
