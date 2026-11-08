@@ -182,6 +182,7 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
       method: 'POST', headers: { authorization: `Bearer ${adminToken}` }, body: fakeLogoForm,
     });
     assert.equal(fakeLogo.status, 400, 'image content must match its extension');
+    assert.deepEqual(fs.readdirSync(process.env.LOGO_DIR!), [logoRecord.value], 'rejected logo files must be removed from disk');
 
     const oversizedLogoForm = new FormData();
     oversizedLogoForm.append('logo', new Blob([new Uint8Array(5 * 1024 * 1024 + 1)], { type: 'image/png' }), 'oversized.png');
@@ -198,6 +199,13 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
       method: 'POST', headers: { authorization: `Bearer ${adminToken}` }, body: videoForm,
     });
     assert.equal(validVideo.status, 200, await validVideo.text());
+
+    const mismatchedVideoMimeForm = new FormData();
+    mismatchedVideoMimeForm.append('video', new Blob([mp4Header], { type: 'video/webm' }), 'wrong-mime.mp4');
+    const mismatchedVideoMime = await fetch(`http://127.0.0.1:${address.port}/api/ads/upload`, {
+      method: 'POST', headers: { authorization: `Bearer ${adminToken}` }, body: mismatchedVideoMimeForm,
+    });
+    assert.equal(mismatchedVideoMime.status, 400, 'video MIME type must match its extension');
     const storedAd = db.prepare('SELECT filename, original_name FROM ads ORDER BY id DESC LIMIT 1').get() as { filename: string; original_name: string };
     assert.match(storedAd.filename, /^ad-[a-f0-9-]+\.mp4$/);
     assert.equal(storedAd.original_name, 'sample.mp4', 'client-supplied path segments must not be stored');
@@ -208,6 +216,7 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
       method: 'POST', headers: { authorization: `Bearer ${adminToken}` }, body: fakeVideoForm,
     });
     assert.equal(fakeVideo.status, 400, 'video content must match its extension');
+    assert.deepEqual(fs.readdirSync(process.env.ADS_DIR!), [storedAd.filename], 'rejected video files must be removed from disk');
     assert.equal(db.prepare('SELECT COUNT(*) AS count FROM ads').get() && (db.prepare('SELECT COUNT(*) AS count FROM ads').get() as { count: number }).count, 1, 'rejected video must not create advertisement metadata');
 
     const signatureDirectory = path.join(directory, 'signature-tests');
