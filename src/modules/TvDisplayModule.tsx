@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { Bell, Volume2, VolumeX, Tv, Play, Pause } from 'lucide-react';
+import { Bell, Volume2, VolumeX, Tv, Play, Pause, Wifi, WifiOff } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useWebSocket } from '@/lib/useWebSocket';
 
@@ -32,8 +32,19 @@ export function TvDisplayModule() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const [audioUnlocked, setAudioUnlocked] = useState(false);
-  const { lastMessage } = useWebSocket();
+  const { lastMessage, connectionStatus } = useWebSocket();
   const lastSpokenRef = useRef<Set<number>>(new Set());
+
+  const loadTvQueue = useCallback(() => {
+    api.get<{ currentTickets: CalledTicket[]; latestTicket: CalledTicket | null; currentlyServing: CalledTicket[]; waitingTickets: WaitingTicket[] }>('/tv/queue')
+      .then((r) => {
+        setCurrentTickets(r.currentTickets ?? []);
+        setLatestTicket(r.latestTicket ?? null);
+        setCurrentlyServing(r.currentlyServing ?? []);
+        setWaitingTickets(r.waitingTickets ?? []);
+      })
+      .catch(() => {});
+  }, []);
 
   // Load initial state
   useEffect(() => {
@@ -47,24 +58,18 @@ export function TvDisplayModule() {
     });
     api.get<{ ads: Ad[] }>('/ads').then((r) => setAds(r.ads.filter((a) => a.is_active)));
     loadTvQueue();
-  }, []);
-
-  const loadTvQueue = () => {
-    api.get<{ currentTickets: CalledTicket[]; latestTicket: CalledTicket | null; currentlyServing: CalledTicket[]; waitingTickets: WaitingTicket[] }>('/tv/queue')
-      .then((r) => {
-        setCurrentTickets(r.currentTickets ?? []);
-        setLatestTicket(r.latestTicket ?? null);
-        setCurrentlyServing(r.currentlyServing ?? []);
-        setWaitingTickets(r.waitingTickets ?? []);
-      })
-      .catch(() => {});
-  };
+  }, [loadTvQueue]);
 
   useEffect(() => {
     if (lastMessage && (lastMessage.type === 'ticket-called' || lastMessage.type === 'ticket-recalled' || lastMessage.type === 'ticket-completed' || lastMessage.type === 'ticket-created' || lastMessage.type === 'ticket-transferred' || lastMessage.type === 'queue-updated')) {
       loadTvQueue();
     }
-  }, [lastMessage]);
+  }, [lastMessage, loadTvQueue]);
+
+  // Refresh the public TV snapshot after reconnecting so missed WebSocket events are recovered.
+  useEffect(() => {
+    if (connectionStatus === 'connected') loadTvQueue();
+  }, [connectionStatus, loadTvQueue]);
 
   useEffect(() => () => {
     if (audioContextRef.current && audioContextRef.current.state !== 'closed') void audioContextRef.current.close();
@@ -228,6 +233,23 @@ export function TvDisplayModule() {
           </div>
         </div>
         <div className="flex items-center gap-3">
+          <div
+            className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold ${
+              connectionStatus === 'connected'
+                ? 'bg-emerald-500/15 text-emerald-200'
+                : connectionStatus === 'connecting'
+                  ? 'bg-amber-500/15 text-amber-200'
+                  : 'bg-red-500/15 text-red-200'
+            }`}
+            role="status"
+            aria-live="polite"
+            title={connectionStatus === 'connected' ? 'Live queue updates connected' : 'Live queue updates are reconnecting'}
+          >
+            {connectionStatus === 'connected' ? <Wifi className="h-4 w-4" /> : <WifiOff className="h-4 w-4" />}
+            <span>
+              {connectionStatus === 'connected' ? 'Live updates connected' : connectionStatus === 'connecting' ? 'Connecting…' : 'Reconnecting…'}
+            </span>
+          </div>
           <button onClick={handleVoiceButton} className="rounded-lg bg-white/10 p-2 hover:bg-white/20" title={audioUnlocked ? "Toggle voice" : "Enable voice announcements"}>
             {voiceEnabled ? <Volume2 className="h-5 w-5" /> : <VolumeX className="h-5 w-5" />}
           </button>
@@ -237,6 +259,12 @@ export function TvDisplayModule() {
           <a href="#/" className="rounded-lg bg-white/10 px-3 py-2 text-xs hover:bg-white/20">Back to App</a>
         </div>
       </div>
+
+      {connectionStatus !== 'connected' && (
+        <div className="border-b border-amber-400/20 bg-amber-500/10 px-4 py-2 text-center text-sm text-amber-100" role="status" aria-live="polite">
+          Live updates are temporarily unavailable. The TV will reconnect automatically; queue information may be out of date.
+        </div>
+      )}
 
       {/* TV layout: waiting queue left; now serving, recent calls, and ad stacked on the right */}
       <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-hidden p-2 lg:grid-cols-[minmax(230px,1fr)_minmax(0,3fr)] lg:grid-rows-1">
