@@ -1,25 +1,7 @@
 import http from 'node:http';
-import express from 'express';
-import cors from 'cors';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { config } from './config.js';
 import { getDb, closeDb } from './db/index.js';
 import { initWs, closeWs } from './ws/index.js';
-import { healthRouter } from './routes/health.js';
-import { backupRouter } from './routes/backup.js';
-import { adsRouter } from './routes/ads.js';
-import { authRouter } from './routes/auth.js';
-import { servicesRouter } from './routes/services.js';
-import { countersRouter } from './routes/counters.js';
-import { staffRouter } from './routes/staff.js';
-import { ticketsRouter } from './routes/tickets.js';
-import { settingsRouter } from './routes/settings.js';
-import { reportsRouter } from './routes/reports.js';
-import { adsManageRouter } from './routes/ads-manage.js';
-import { authMiddleware } from './lib/middleware.js';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 function gracefulShutdown(server: http.Server, signal: string): void {
   console.log(`\n[server] received ${signal}, shutting down...`);
