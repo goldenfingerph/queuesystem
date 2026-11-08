@@ -2,7 +2,7 @@ name: Verify local LAN queue system
 
 on:
   push:
-    branches: [main, restore-local-sqlite-lan]
+    branches: [main, restore-local-sqlite-lan, windows-batch-security-hardening]
   pull_request:
     branches: [main]
 
