@@ -5,6 +5,7 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { config } from '../config.js';
 import { getDb } from '../db/index.js';
+import { hasExpectedFileSignature } from '../lib/upload-validation.js';
 
 const allowed = new Set(['.mp4', '.webm', '.ogg']);
 const upload = multer({
@@ -42,6 +43,13 @@ export function adsManageRouter(): Router {
     });
   }, (req, res) => {
     if (!req.file) { res.status(400).json({ error: 'Choose a supported video file (MP4, WebM, or OGG)' }); return; }
+    const extension = path.extname(req.file.originalname).toLowerCase();
+    let signatureValid = false;
+    try { signatureValid = hasExpectedFileSignature(req.file.path, extension); } catch { /* reject unreadable uploads */ }
+    if (!signatureValid) {
+      fs.rmSync(req.file.path, { force: true });
+      res.status(400).json({ error: 'Video content does not match its file format' }); return;
+    }
     const duration = req.body.duration_sec === undefined || req.body.duration_sec === '' ? null : Number(req.body.duration_sec);
     if (duration !== null && (!Number.isFinite(duration) || duration < 0 || duration > 86400)) {
       fs.rmSync(req.file.path, { force: true });
