@@ -17,6 +17,15 @@ interface ReportData {
   }[];
 }
 
+interface AnalyticsData {
+  from: string;
+  to: string;
+  totals: { total: number; completed: number; skipped: number; avgWaitSeconds: number | null; avgServiceSeconds: number | null };
+  daily: { date: string; total: number; completed: number; skipped: number }[];
+  byService: { serviceId: number; service: string; total: number; waiting: number; serving: number; completed: number; skipped: number; avgWaitSeconds: number | null; avgServiceSeconds: number | null }[];
+  hourly: { hour: number; total: number }[];
+}
+
 export function ReportsModule() {
   const [services, setServices] = useState<Service[]>([]);
   const [date, setDate] = useState(getBusinessDate);
@@ -25,6 +34,11 @@ export function ReportsModule() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [retryCount, setRetryCount] = useState(0);
+  const [fromDate, setFromDate] = useState(getBusinessDate);
+  const [toDate, setToDate] = useState(getBusinessDate);
+  const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [analyticsError, setAnalyticsError] = useState('');
 
   useEffect(() => {
     api.get<{ services: Service[] }>('/services')
@@ -47,6 +61,29 @@ export function ReportsModule() {
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [date, serviceId, retryCount]);
+
+  useEffect(() => {
+    if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(fromDate) || !/^\\d{4}-\\d{2}-\\d{2}$/.test(toDate)) {
+      setAnalyticsError('Choose valid start and end dates.');
+      setAnalytics(null);
+      return;
+    }
+    let cancelled = false;
+    setAnalyticsLoading(true);
+    setAnalyticsError('');
+    const params = new URLSearchParams({ from: fromDate, to: toDate });
+    if (serviceId) params.set('serviceId', serviceId);
+    api.get<AnalyticsData>(`/reports/analytics?${params.toString()}`)
+      .then((result) => { if (!cancelled) setAnalytics(result); })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          setAnalytics(null);
+          setAnalyticsError(err instanceof Error ? err.message : 'Unable to load analytics.');
+        }
+      })
+      .finally(() => { if (!cancelled) setAnalyticsLoading(false); });
+    return () => { cancelled = true; };
+  }, [fromDate, toDate, serviceId]);
 
   const exportCsv = async () => {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(Date.parse(`${date}T00:00:00`))) { setError('Choose a valid report date before exporting.'); return; }
@@ -103,6 +140,14 @@ export function ReportsModule() {
             <input type="date" className="input-field" value={date} onChange={(e) => setDate(e.target.value)} />
           </div>
           <div>
+            <label className="mb-1 block text-xs font-semibold uppercase text-navy-400">Trend From · من تاريخ</label>
+            <input type="date" className="input-field" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-semibold uppercase text-navy-400">Trend To · إلى تاريخ</label>
+            <input type="date" className="input-field" value={toDate} onChange={(e) => setToDate(e.target.value)} />
+          </div>
+          <div>
             <label className="mb-1 block text-xs font-semibold uppercase text-navy-400"><Filter className="inline h-3 w-3" /> Service · الخدمة</label>
             <select className="input-field" value={serviceId} onChange={(e) => setServiceId(e.target.value)}>
               <option value="">All Services · جميع الخدمات</option>
@@ -110,6 +155,81 @@ export function ReportsModule() {
             </select>
           </div>
         </div>
+
+        <section className="surface mb-6 p-5" aria-labelledby="advanced-analytics-title">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 id="advanced-analytics-title" className="text-base font-bold text-navy-900">Advanced Analytics · التحليلات المتقدمة</h2>
+              <p className="text-xs text-navy-500">Daily volume, service comparison and arrival patterns · حجم التذاكر ومقارنة الخدمات وأوقات الوصول</p>
+            </div>
+            <span className="text-xs text-navy-400">Maximum range: 90 days</span>
+          </div>
+          {analyticsLoading ? <p className="text-sm text-navy-400">Loading analytics... · جارٍ تحميل التحليلات...</p> : analyticsError ? (
+            <p className="text-sm text-error-600" role="alert">{analyticsError}</p>
+          ) : analytics ? (
+            <>
+              <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <StatCard label="Range Tickets · إجمالي التذاكر" value={analytics.totals.total} color="brand" />
+                <StatCard label="Completed · مكتمل" value={analytics.totals.completed} color="success" />
+                <StatCard label="No-show · لم يحضر" value={analytics.totals.skipped} color="error" />
+                <StatCard label="Avg Wait · متوسط الانتظار" value={fmtTime(analytics.totals.avgWaitSeconds)} color="navy" small />
+              </div>
+              <div className="grid gap-5 lg:grid-cols-2">
+                <div>
+                  <h3 className="mb-3 text-sm font-semibold text-navy-800">Daily Ticket Volume · حجم التذاكر اليومي</h3>
+                  {analytics.daily.length === 0 ? <p className="text-sm text-navy-400">No ticket data in this range.</p> : (
+                    <div className="space-y-2">
+                      {analytics.daily.map((day) => {
+                        const width = analytics.totals.total > 0 ? Math.max(2, day.total / Math.max(...analytics.daily.map((item) => item.total), 1) * 100) : 0;
+                        return <div key={day.date} className="grid grid-cols-[5.5rem_1fr_2rem] items-center gap-2 text-xs">
+                          <span className="text-navy-500">{day.date.slice(5)}</span>
+                          <div className="h-3 overflow-hidden rounded bg-slate-100"><div className="h-full rounded bg-brand-500" style={{ width: `${width}%` }} /></div>
+                          <span className="text-right font-semibold text-navy-700">{day.total}</span>
+                        </div>;
+                      })}
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <h3 className="mb-3 text-sm font-semibold text-navy-800">Hourly Arrivals · الوصول حسب الساعة</h3>
+                  {analytics.hourly.length === 0 ? <p className="text-sm text-navy-400">No arrival data in this range.</p> : (
+                    <div className="space-y-2">
+                      {analytics.hourly.map((bucket) => {
+                        const maxHour = Math.max(...analytics.hourly.map((item) => item.total), 1);
+                        const width = Math.max(2, bucket.total / maxHour * 100);
+                        return <div key={bucket.hour} className="grid grid-cols-[3rem_1fr_2rem] items-center gap-2 text-xs">
+                          <span className="text-navy-500">{String(bucket.hour).padStart(2, '0')}:00</span>
+                          <div className="h-3 overflow-hidden rounded bg-slate-100"><div className="h-full rounded bg-accent-500" style={{ width: `${width}%` }} /></div>
+                          <span className="text-right font-semibold text-navy-700">{bucket.total}</span>
+                        </div>;
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="mt-6 overflow-x-auto">
+                <h3 className="mb-3 text-sm font-semibold text-navy-800">Service Comparison · مقارنة الخدمات</h3>
+                {analytics.byService.length === 0 ? <p className="text-sm text-navy-400">No service data in this range.</p> : (
+                  <table className="w-full text-sm">
+                    <thead className="bg-slate-50 text-xs uppercase text-navy-500">
+                      <tr><th className="px-3 py-2 text-left">Service</th><th className="px-3 py-2 text-center">Total</th><th className="px-3 py-2 text-center">Completed</th><th className="px-3 py-2 text-center">No-show</th><th className="px-3 py-2 text-center">Avg Wait</th><th className="px-3 py-2 text-center">Avg Service</th></tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {analytics.byService.map((service) => <tr key={service.serviceId}>
+                        <td className="px-3 py-2 font-medium text-navy-900">{service.service}</td>
+                        <td className="px-3 py-2 text-center">{service.total}</td>
+                        <td className="px-3 py-2 text-center text-success-600">{service.completed}</td>
+                        <td className="px-3 py-2 text-center text-error-600">{service.skipped}</td>
+                        <td className="px-3 py-2 text-center">{fmtTime(service.avgWaitSeconds)}</td>
+                        <td className="px-3 py-2 text-center">{fmtTime(service.avgServiceSeconds)}</td>
+                      </tr>)}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </>
+          ) : null}
+        </section>
 
         {loading ? <p className="text-navy-400">Loading... · جارٍ التحميل...</p> : error ? (
           <div className="surface p-5 text-sm text-error-600" role="alert">
