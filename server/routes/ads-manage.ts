@@ -7,7 +7,11 @@ import { config } from '../config.js';
 import { getDb } from '../db/index.js';
 import { hasSupportedFileSignature } from '../lib/upload-validation.js';
 
-const allowed = new Set(['.mp4', '.webm', '.ogg']);
+const allowedMimeTypes: Record<string, string[]> = {
+  '.mp4': ['video/mp4'],
+  '.webm': ['video/webm'],
+  '.ogg': ['video/ogg', 'application/ogg'],
+};
 const upload = multer({
   storage: multer.diskStorage({
     destination: (_req, _file, cb) => {
@@ -16,7 +20,7 @@ const upload = multer({
     },
     filename: (_req, file, cb) => {
       const ext = path.extname(file.originalname).toLowerCase();
-      if (!allowed.has(ext)) { cb(new Error('Only MP4, WebM, and OGG video files are allowed'), ''); return; }
+      if (!allowedMimeTypes[ext]) { cb(new Error('Only MP4, WebM, and OGG video files are allowed'), ''); return; }
       cb(null, `ad-${randomUUID()}${ext}`);
     },
   }),
