@@ -111,7 +111,8 @@ export function StaffModule() {
     if (!editId && form.password.length < 8) { setError('Password must be at least 8 characters.'); return; }
     if (form.password && form.password.length < 8) { setError('Password must be at least 8 characters.'); return; }
     if (form.password.length > 128) { setError('Password must be 128 characters or fewer.'); return; }
-    const body: Record<string, unknown> = { display_name: displayName, role: form.role, is_active: form.is_active };
+    try {
+      const body: Record<string, unknown> = { display_name: displayName, role: form.role, is_active: form.is_active };
       if (form.password) body.password = form.password;
       if (editId) {
         await api.put(`/staff/${editId}`, body);
