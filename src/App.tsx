@@ -13,9 +13,10 @@ import { CounterDeskModule } from '@/modules/CounterDeskModule';
 import { TvDisplayModule } from '@/modules/TvDisplayModule';
 import { ReportsModule } from '@/modules/ReportsModule';
 import { SystemSettingsModule } from '@/modules/SystemSettingsModule';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 function getRoute(): string {
-  const hash = window.location.hash.replace(/^#\/?/, '');
+  const hash = window.location.hash.replace(/^#\\/?/, '');
   return hash || '';
 }
 
@@ -81,8 +82,10 @@ function Router() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <Router />
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <Router />
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }
