@@ -4,10 +4,51 @@ import os from 'node:os';
 import path from 'node:path';
 import http from 'node:http';
 import test from 'node:test';
+import Database from 'better-sqlite3';
 import { isAllowedWebSocketOrigin } from '../ws/index.js';
 import { hasSupportedFileSignature } from '../lib/upload-validation.js';
+import { rotateBackups } from '../lib/backup-retention.js';
 import { getBusinessDate } from '../../shared/business-date.js';
 
+
+
+test('backup rotation keeps newest regular backups and preserves restore safety copies', () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'queuesystem-backup-retention-'));
+  const db = new Database(':memory:');
+  try {
+    db.exec(`
+      CREATE TABLE backups (
+        id INTEGER PRIMARY KEY,
+        filename TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      );
+    `);
+    const insert = db.prepare('INSERT INTO backups (filename, created_at) VALUES (?, ?)');
+    for (let index = 1; index <= 4; index += 1) {
+      const filename = `infinity-backup-2026-11-0${index}T00-00-00-000Z.db`;
+      fs.writeFileSync(path.join(directory, filename), `backup-${index}`);
+      insert.run(filename, `2026-11-0${index} 00:00:00`);
+    }
+    const safetyCopy = 'infinity-pre-restore-2026-11-08T00-00-00-000Z.db';
+    fs.writeFileSync(path.join(directory, safetyCopy), 'safety-copy');
+    insert.run(safetyCopy, '2026-11-08 00:00:00');
+
+    assert.equal(rotateBackups(db, directory, 2), 2);
+    const remaining = db.prepare('SELECT filename FROM backups ORDER BY filename').all() as { filename: string }[];
+    assert.deepEqual(remaining.map((row) => row.filename).sort(), [
+      'infinity-backup-2026-11-03T00-00-00-000Z.db',
+      'infinity-backup-2026-11-04T00-00-00-000Z.db',
+      safetyCopy,
+    ].sort());
+    assert.equal(fs.existsSync(path.join(directory, 'infinity-backup-2026-11-01T00-00-00-000Z.db')), false);
+    assert.equal(fs.existsSync(path.join(directory, 'infinity-backup-2026-11-02T00-00-00-000Z.db')), false);
+    assert.equal(fs.existsSync(path.join(directory, safetyCopy)), true);
+    assert.throws(() => rotateBackups(db, directory, 0), /retention count/);
+  } finally {
+    db.close();
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
 
 test('business date uses the Abu Dhabi 06:00 boundary regardless of host timezone', () => {
   assert.equal(getBusinessDate(new Date('2026-11-08T01:59:59.000Z')), '2026-11-07', 'one second before 06:00 Abu Dhabi remains on the previous business day');
