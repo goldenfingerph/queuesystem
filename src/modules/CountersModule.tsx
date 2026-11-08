@@ -59,15 +59,18 @@ export function CountersModule() {
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    const counterName = form.name.trim();
+    if (!Number.isSafeInteger(form.number) || form.number < 1 || form.number > 9999) { setError('Counter number must be a whole number from 1 to 9,999.'); return; }
+    if (!counterName || counterName.length > 80) { setError('Enter a counter name of 1 to 80 characters.'); return; }
     setSaving(true);
     let counterSaved = false;
     try {
       if (editCounter) {
-        await api.put(`/counters/${editCounter.id}`, { number: form.number, name: form.name, is_active: editCounter.is_active });
+        await api.put(`/counters/${editCounter.id}`, { number: form.number, name: counterName, is_active: editCounter.is_active });
         counterSaved = true;
         await api.put(`/counters/${editCounter.id}/services`, { serviceIds: selectedServices });
       } else {
-        const r = await api.post<{ id: number }>('/counters', form);
+        const r = await api.post<{ id: number }>('/counters', { number: form.number, name: counterName });
         counterSaved = true;
         await api.put(`/counters/${r.id}/services`, { serviceIds: selectedServices });
       }
@@ -162,8 +165,8 @@ export function CountersModule() {
               {error && <p className="mb-3 rounded-lg bg-error-500/10 px-3 py-2 text-sm text-error-600">{error}</p>}
               <div className="space-y-3">
                 <div className="grid grid-cols-2 gap-3">
-                  <input type="number" min={1} step={1} className="input-field" placeholder="Number" value={form.number} onChange={(e) => setForm({ ...form, number: Number(e.target.value) })} required />
-                  <input className="input-field" placeholder="Name (e.g. Front Desk)" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
+                  <input type="number" min={1} step={1} className="input-field" placeholder="Number" max="9999" value={form.number} onChange={(e) => setForm({ ...form, number: Number(e.target.value) })} required />
+                  <input className="input-field" placeholder="Name (e.g. Front Desk)" maxLength={80} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
                 </div>
                 <div>
                   <p className="mb-2 text-xs font-semibold uppercase text-navy-500">Assigned Services</p>
