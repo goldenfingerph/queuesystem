@@ -18,6 +18,16 @@ if not exist "node_modules" (
   exit /b 1
 )
 
+if exist "server\certs\server.crt" if exist "server\certs\server.key" (
+  set "TLS_CERT_FILE=%CD%\server\certs\server.crt"
+  set "TLS_KEY_FILE=%CD%\server\certs\server.key"
+  echo HTTPS/WSS certificate files found. Secure transport will be enabled.
+) else (
+  echo HTTPS/WSS certificate files not found.
+  echo HTTP/WS mode will be used. LAN traffic is not encrypted.
+  echo See HTTPS-WSS-SETUP.md to configure a trusted certificate.
+)
+
 echo.
 echo Starting the local server and building the app...
 echo Keep this window open while the queue system is in use.
