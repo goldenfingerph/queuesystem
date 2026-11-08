@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.server.json",
+    "test": "tsx --test server/lib/auth.test.ts server/db/migrations.test.ts",
     "server": "tsx server/index.ts",
     "start": "npm run build && npm run server",
     "db:restore": "tsx server/scripts/restore-backup.ts"

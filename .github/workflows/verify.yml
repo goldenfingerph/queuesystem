@@ -24,5 +24,7 @@ jobs:
         run: npm ci
       - name: Type-check frontend and server
         run: npm run typecheck
+      - name: Run unit and database integration tests
+        run: npm test
       - name: Build production frontend
         run: npm run build
