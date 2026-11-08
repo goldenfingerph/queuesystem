@@ -202,8 +202,8 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
     assert.equal(manifest.icons[0]?.src, '/pwa-icon.svg');
     assert.equal(workerResponse.status, 200);
     const worker = await workerResponse.text();
-    assert.match(worker, /startsWith\\('\/api\\/'\\)/);
-    assert.match(worker, /request\\.mode === 'navigate'/);
+    assert.ok(worker.includes("url.pathname.startsWith('/api/')"));
+    assert.ok(worker.includes("request.mode === 'navigate'"));
     assert.equal(iconResponse.status, 200);
     assert.match(await iconResponse.text(), /<svg/);
     assert.equal(pageResponse.status, 200);
