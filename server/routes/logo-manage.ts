@@ -59,7 +59,7 @@ export function logoManageRouter(): Router {
       const previous = db.prepare("SELECT value FROM system_settings WHERE key = 'logo_filename'").get() as { value: string } | undefined;
       db.prepare("INSERT INTO system_settings (key, value, updated_at) VALUES ('logo_filename', ?, datetime('now')) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at")
         .run(req.file.filename);
-      if (previous?.value && previous.value !== req.file.filename && previous.value === path.basename(previous.value) && /^logo-[a-f0-9-]+\\.(png|jpg|jpeg|webp)$/.test(previous.value)) {
+      if (previous?.value && previous.value !== req.file.filename && previous.value === path.basename(previous.value) && /^logo-[a-f0-9-]+\.(png|jpg|jpeg|webp)$/.test(previous.value)) {
         fs.rmSync(path.resolve(config.logoDir, previous.value), { force: true });
       }
       res.json({ status: 'ok', logoUrl: '/api/media/logo/current' });
