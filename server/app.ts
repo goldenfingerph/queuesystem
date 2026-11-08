@@ -39,7 +39,9 @@ export function createApp(): Express {
   // API responses can contain staff and queue data. Never let browsers or
   // intermediary caches retain those responses. Public ad media sets its own
   // explicit short-lived cache policy in adsRouter().
-  app.use('/api', (_req, res, next) => {
+  app.use('/api', (req, res, next) => {
+    // Keep the existing short-lived cache policy for public TV advertisement videos.
+    if (req.path.startsWith('/media/ads/')) return next();
     res.setHeader('Cache-Control', 'no-store');
     res.setHeader('Pragma', 'no-cache');
     next();
