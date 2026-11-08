@@ -29,8 +29,14 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
       import('../db/index.js'),
       import('../lib/middleware.js'),
       import('../lib/auth.js'),
+      import('../config.js'),
     ]);
     closeDb = database.closeDb;
+    assert.doesNotThrow(() => serverConfig.validateServerEnvironment({}));
+    assert.throws(() => serverConfig.validateServerEnvironment({ PORT: '0' }), /PORT must be a whole number/);
+    assert.throws(() => serverConfig.validateServerEnvironment({ HOST: 'bad host' }), /HOST must be a valid/);
+    assert.throws(() => serverConfig.validateServerEnvironment({ TLS_CERT_FILE: 'server.crt' }), /TLS_CERT_FILE and TLS_KEY_FILE/);
+    assert.throws(() => serverConfig.validateServerEnvironment({ ADMIN_INITIAL_PASSWORD: 'short' }), /ADMIN_INITIAL_PASSWORD must be 12 to 200/);
     const firstRunPassword = 'test-first-run-admin-password';
     process.env.ADMIN_INITIAL_PASSWORD = firstRunPassword;
     const db = database.getDb();
