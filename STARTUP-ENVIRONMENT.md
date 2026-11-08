@@ -35,6 +35,14 @@ The server automatically checks queue-event history at startup and once every 24
 
 The batch file automatically detects `server/certs/server.crt` and `server/certs/server.key`. If both exist, it supplies the corresponding environment variables and the server enables HTTPS/WSS. If they are missing, the existing HTTP/WS LAN mode remains available with an explicit warning. A certificate must still be trusted by every client device; see [HTTPS-WSS-SETUP.md](HTTPS-WSS-SETUP.md).
 
+## PWA and offline behavior
+
+The production build includes `public/manifest.webmanifest`, the app icon, and a service worker. On HTTPS (or localhost), supported browsers can offer installation as an app. The service worker caches only the static app shell and frontend assets so the interface can open during a temporary connection loss. It never caches API responses, queue data, login/session responses, advertisement media, or WebSocket traffic; live queue operations still require the server connection.
+
+The default Windows LAN mode is HTTP/WS and therefore is not a secure context for service-worker installation on other devices. To install the PWA on staff PCs, tablets, or the TV, configure a trusted HTTPS certificate using [HTTPS-WSS-SETUP.md](HTTPS-WSS-SETUP.md). Existing browser access over HTTP continues to work without PWA installation or offline caching.
+
+The TV display keeps its live queue updates and now-serving announcements separate from offline shell caching. Use the TV audio control to enable or disable voice announcements after the browser permits audio playback.
+
 ## Startup errors
 
 Correct the environment variable named in the error message, then run `START-INFINITY-SERVICES.bat` again. The server checks port range, host syntax, configured paths, TLS certificate/key pairing and readability, and bootstrap-password length before it opens the database. It does not automatically modify existing queue data or backups.
