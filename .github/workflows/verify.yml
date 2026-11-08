@@ -64,8 +64,11 @@ jobs:
         run: |
           $packageDir = Join-Path $env:RUNNER_TEMP "QueueSystem-Windows"
           New-Item -ItemType Directory -Force -Path $packageDir | Out-Null
-          robocopy . $packageDir /E /XD .git .github node_modules/.cache /XF npm-audit.json
-          if ($LASTEXITCODE -ge 8) { throw "Failed to stage Windows package (robocopy exit $LASTEXITCODE)" }
+          robocopy . $packageDir /E /XD .git .github node_modules /XF npm-audit.json
+          $robocopyExit = $LASTEXITCODE
+          if ($robocopyExit -ge 8) { throw "Failed to stage Windows package (robocopy exit $robocopyExit)" }
+          # Robocopy uses 1-7 for successful copy outcomes; clear its status for GitHub Actions.
+          $global:LASTEXITCODE = 0
           # Use the exact lockfile validated by npm ci and npm audit in this workflow.
           Copy-Item -Path "package-lock.json" -Destination (Join-Path $packageDir "package-lock.json") -Force
           $readme = @'
