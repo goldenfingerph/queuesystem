@@ -20,11 +20,16 @@ The server validates its environment before opening SQLite, running database mig
 | `ADS_DIR` | `server/public/ads` |
 | `LOGO_DIR` | `server/public/logo` |
 | `BACKUPS_DIR` | `server/data/backups` |
+| `QUEUE_EVENT_RETENTION_DAYS` | `365`; whole number from 30 to 3650 days |
 | `ADMIN_INITIAL_PASSWORD` | Optional; if supplied, 12 to 200 characters. Used only for first-run admin initialization and cleared from process memory afterward. |
 | `TLS_CERT_FILE` | Optional certificate path; must be configured together with `TLS_KEY_FILE` and point to a readable file |
 | `TLS_KEY_FILE` | Optional private-key path; must be configured together with `TLS_CERT_FILE` and point to a readable file |
 
 Custom relative paths are interpreted from the project folder when started with the supplied batch file. Absolute paths are recommended for custom data locations.
+
+## Queue event retention
+
+The server automatically checks queue-event history at startup and once every 24 hours. By default, it prunes event rows older than 365 days only when their ticket is terminal (`completed`, `no_show`, or `transferred`). It keeps the final event for each ticket, all events for active tickets, and every ticket record. This retention applies only to the `queue_events` audit log; ticket history and reports remain based on the retained `tickets` rows. Set `QUEUE_EVENT_RETENTION_DAYS` to change the window (minimum 30 days, maximum 3650 days). Invalid values stop startup before the database is opened. A maintenance error is logged and does not stop the queue server.
 
 ## TLS behavior
 
