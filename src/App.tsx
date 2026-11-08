@@ -13,6 +13,7 @@ import { CounterDeskModule } from '@/modules/CounterDeskModule';
 import { TvDisplayModule } from '@/modules/TvDisplayModule';
 import { ReportsModule } from '@/modules/ReportsModule';
 import { SystemSettingsModule } from '@/modules/SystemSettingsModule';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 function getRoute(): string {
   const hash = window.location.hash.replace(/^#\/?/, '');
@@ -26,7 +27,7 @@ function useRoute(): [string, (r: string) => void] {
     window.addEventListener('hashchange', handler);
     return () => window.removeEventListener('hashchange', handler);
   }, []);
-  const navigate = (r: string) => { window.location.hash = `/${r}`; };
+  const navigate = (r: string) => { window.location.hash = '/' + r; };
   return [route, navigate];
 }
 
@@ -59,7 +60,7 @@ function Router() {
   if (!allowed.includes(moduleId)) {
     const fallback = allowed[0] ?? 'dashboard';
     if (fallback !== moduleId) {
-      window.location.hash = `/${fallback}`;
+      window.location.hash = '/' + fallback;
       return null;
     }
   }
@@ -81,8 +82,10 @@ function Router() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <Router />
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <Router />
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }
