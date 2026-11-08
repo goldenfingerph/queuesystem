@@ -1,0 +1,38 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: infinity-queue-system:local
+    container_name: infinity-queue-system
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 30s
+    ports:
+      - "${QUEUE_PORT:-4000}:4000"
+    environment:
+      NODE_ENV: production
+      PORT: "4000"
+      HOST: 0.0.0.0
+      DB_PATH: /data/infinity.db
+      ADS_DIR: /data/ads
+      LOGO_DIR: /data/logo
+      BACKUPS_DIR: /data/backups
+      ADMIN_INITIAL_PASSWORD: ${ADMIN_INITIAL_PASSWORD:-}
+    volumes:
+      - queue_data:/data
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:4000/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  queue_data:
