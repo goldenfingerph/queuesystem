@@ -40,12 +40,13 @@ export function rotateBackups(
     .sort((a, b) => b.created_at.localeCompare(a.created_at) || b.filename.localeCompare(a.filename) || b.id - a.id);
 
   const result: BackupRotationResult = {
-    retained: Math.min(managedRows.length, retentionCount),
+    retained: 0,
     removed: 0,
     failed: [],
   };
+  const availableRows: BackupRow[] = [];
 
-  for (const row of managedRows.slice(retentionCount)) {
+  for (const row of managedRows) {
     const filePath = path.resolve(directory, row.filename);
     if (!filePath.startsWith(directory + path.sep)) {
       result.failed.push(row.filename);
@@ -53,17 +54,31 @@ export function rotateBackups(
     }
 
     try {
-      if (fs.existsSync(filePath)) {
-        const stat = fs.lstatSync(filePath);
-        // Never follow or remove symlinks, directories, or other special files.
-        if (!stat.isFile() || stat.isSymbolicLink()) {
-          result.failed.push(row.filename);
-          continue;
-        }
-        fs.unlinkSync(filePath);
+      if (!fs.existsSync(filePath)) {
+        // Drop stale metadata without counting a missing file toward retention.
+        db.prepare('DELETE FROM backups WHERE id = ?').run(row.id);
+        result.removed += 1;
+        continue;
       }
+      const stat = fs.lstatSync(filePath);
+      // Never follow or remove symlinks, directories, or other special files.
+      if (!stat.isFile() || stat.isSymbolicLink()) {
+        result.failed.push(row.filename);
+        continue;
+      }
+      availableRows.push(row);
+    } catch {
+      result.failed.push(row.filename);
+    }
+  }
 
-      // Delete the metadata only after the file is gone (or was already missing).
+  result.retained = Math.min(availableRows.length, retentionCount);
+
+  for (const row of availableRows.slice(retentionCount)) {
+    const filePath = path.resolve(directory, row.filename);
+    try {
+      fs.unlinkSync(filePath);
+      // Delete the metadata only after the file is gone.
       db.prepare('DELETE FROM backups WHERE id = ?').run(row.id);
       result.removed += 1;
     } catch {
