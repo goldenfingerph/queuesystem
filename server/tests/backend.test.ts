@@ -24,7 +24,7 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
   let closeDb: (() => void) | undefined;
 
   try {
-    const [{ createApp }, database, middleware, auth] = await Promise.all([
+    const [{ createApp }, database, middleware, auth, serverConfig] = await Promise.all([
       import('../app.js'),
       import('../db/index.js'),
       import('../lib/middleware.js'),
