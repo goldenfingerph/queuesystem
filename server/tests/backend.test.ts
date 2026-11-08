@@ -117,7 +117,7 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
     const firstTicketPage = await fetch(`http://127.0.0.1:${address.port}/api/tickets?page=1&limit=2`, {
       headers: { authorization: `Bearer ${token}` },
     });
-    assert.equal(firstTicketPage.status, 200, await firstTicketPage.text());
+    assert.equal(firstTicketPage.status, 200);
     const firstPageData = await firstTicketPage.json() as {
       tickets: { number: string }[];
       pagination: { page: number; limit: number; total: number; totalPages: number; hasNextPage: boolean; hasPreviousPage: boolean };
@@ -135,7 +135,7 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
     const secondTicketPage = await fetch(`http://127.0.0.1:${address.port}/api/tickets?page=2&limit=2`, {
       headers: { authorization: `Bearer ${token}` },
     });
-    assert.equal(secondTicketPage.status, 200, await secondTicketPage.text());
+    assert.equal(secondTicketPage.status, 200);
     const secondPageData = await secondTicketPage.json() as {
       tickets: { number: string }[];
       pagination: { page: number; total: number; hasNextPage: boolean; hasPreviousPage: boolean };
@@ -148,7 +148,7 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
     const filteredTicketPage = await fetch(`http://127.0.0.1:${address.port}/api/tickets?status=completed&serviceId=${sourceService}&page=2&limit=1`, {
       headers: { authorization: `Bearer ${token}` },
     });
-    assert.equal(filteredTicketPage.status, 200, await filteredTicketPage.text());
+    assert.equal(filteredTicketPage.status, 200);
     const filteredPageData = await filteredTicketPage.json() as {
       tickets: { number: string }[];
       pagination: { total: number; totalPages: number };
