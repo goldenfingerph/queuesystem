@@ -31,7 +31,7 @@ export function validateServerEnvironment(values: NodeJS.ProcessEnv = process.en
   const errors: string[] = [];
   const portText = values.PORT ?? '4000';
   const port = Number(portText);
-  if (!/^\\d+$/.test(portText) || !Number.isInteger(port) || port < 1 || port > 65535) {
+  if (!portText || String(port) !== portText || !Number.isInteger(port) || port < 1 || port > 65535) {
     errors.push('PORT must be a whole number from 1 to 65535.');
   }
 
@@ -45,7 +45,7 @@ export function validateServerEnvironment(values: NodeJS.ProcessEnv = process.en
 
   for (const name of ['DB_PATH', 'ADS_DIR', 'LOGO_DIR', 'BACKUPS_DIR'] as const) {
     const value = values[name];
-    if (value !== undefined && (!value.trim() || value.includes('\\0'))) {
+    if (value !== undefined && (!value.trim() || value.includes(String.fromCharCode(0)) {
       errors.push(`${name} must be a non-empty valid path when configured.`);
     }
   }
@@ -57,7 +57,7 @@ export function validateServerEnvironment(values: NodeJS.ProcessEnv = process.en
   }
   for (const [name, value] of [['TLS_CERT_FILE', cert], ['TLS_KEY_FILE', key]] as const) {
     if (value !== undefined) {
-      if (!value.trim() || value.includes('\\0')) {
+      if (!value.trim() || value.includes(String.fromCharCode(0)) {
         errors.push(`${name} must be a non-empty valid path when configured.`);
         continue;
       }
@@ -75,6 +75,6 @@ export function validateServerEnvironment(values: NodeJS.ProcessEnv = process.en
   }
 
   if (errors.length > 0) {
-    throw new Error(`Invalid server environment configuration:\\n- ${errors.join('\\n- ')}`);
+    throw new Error('Invalid server environment configuration:' + String.fromCharCode(10) + '- ' + errors.join(String.fromCharCode(10) + '- '));
   }
 }
