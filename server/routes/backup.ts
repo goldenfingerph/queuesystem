@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { config } from '../config.js';
 import { getDb } from '../db/index.js';
+import { rotateBackups } from '../lib/backup-retention.js';
 
 export function backupRouter(): Router {
   const router = Router();
@@ -19,6 +20,18 @@ export function backupRouter(): Router {
       const stat = fs.statSync(dest);
       db.prepare('INSERT INTO backups (filename, size_bytes, created_by) VALUES (?, ?, ?)')
         .run(filename, stat.size, req.user?.id ?? null);
+
+      // Retention is best-effort: a cleanup problem must not invalidate the
+      // backup that was just created and recorded successfully.
+      try {
+        const rotation = rotateBackups(db, config.backupsDir);
+        if (rotation.failed.length > 0) {
+          console.warn('[backup] Could not prune older backup files:', rotation.failed);
+        }
+      } catch (rotationError) {
+        console.warn('[backup] Backup succeeded, but retention cleanup failed:', rotationError);
+      }
+
       res.json({ status: 'ok', filename, sizeBytes: stat.size });
     } catch (err) {
       if (dest && fs.existsSync(dest)) fs.rmSync(dest, { force: true });
@@ -29,7 +42,7 @@ export function backupRouter(): Router {
   router.get('/backups', (_req, res) => {
     try {
       const rows = getDb().prepare(
-        'SELECT id, filename, size_bytes, created_at FROM backups ORDER BY created_at DESC',
+        'SELECT id, filename, size_bytes, created_at FROM backups ORDER BY created_at DESC, id DESC',
       ).all();
       res.json({ status: 'ok', backups: rows });
     } catch (err) {
