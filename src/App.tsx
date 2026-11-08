@@ -16,7 +16,7 @@ import { SystemSettingsModule } from '@/modules/SystemSettingsModule';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 function getRoute(): string {
-  const hash = window.location.hash.replace(/^#\\/?/, '');
+  const hash = window.location.hash.replace(/^#\/?/, '');
   return hash || '';
 }
 
@@ -27,7 +27,7 @@ function useRoute(): [string, (r: string) => void] {
     window.addEventListener('hashchange', handler);
     return () => window.removeEventListener('hashchange', handler);
   }, []);
-  const navigate = (r: string) => { window.location.hash = `/${r}`; };
+  const navigate = (r: string) => { window.location.hash = \`/\${r}\`; };
   return [route, navigate];
 }
 
@@ -60,7 +60,7 @@ function Router() {
   if (!allowed.includes(moduleId)) {
     const fallback = allowed[0] ?? 'dashboard';
     if (fallback !== moduleId) {
-      window.location.hash = `/${fallback}`;
+      window.location.hash = \`/\${fallback}\`;
       return null;
     }
   }
