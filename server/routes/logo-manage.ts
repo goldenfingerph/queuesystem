@@ -7,7 +7,12 @@ import { config } from '../config.js';
 import { getDb } from '../db/index.js';
 import { hasSupportedFileSignature } from '../lib/upload-validation.js';
 
-const allowed = new Set(['.png', '.jpg', '.jpeg', '.webp']);
+const allowedMimeTypes: Record<string, string> = {
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.webp': 'image/webp',
+};
 const upload = multer({
   storage: multer.diskStorage({
     destination: (_req, _file, cb) => {
@@ -16,7 +21,7 @@ const upload = multer({
     },
     filename: (_req, file, cb) => {
       const ext = path.extname(file.originalname).toLowerCase();
-      if (!allowed.has(ext)) { cb(new Error('Only PNG, JPG, and WebP images are allowed'), ''); return; }
+      if (!allowedMimeTypes[ext]) { cb(new Error('Only PNG, JPG, and WebP images are allowed'), ''); return; }
       cb(null, `logo-${randomUUID()}${ext}`);
     },
   }),
