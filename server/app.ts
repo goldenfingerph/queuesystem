@@ -106,6 +106,7 @@ export function createApp(): Express {
     res.sendFile(path.join(webRoot, 'index.html'), (err) => { if (err) next(err); });
   });
   app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
+    void _next; // Express requires all four error-handler parameters.
     console.error('[http] request failed:', err);
     if (res.headersSent) return;
     res.status(500).json({ error: 'An unexpected server error occurred. Check the server console for details.' });
