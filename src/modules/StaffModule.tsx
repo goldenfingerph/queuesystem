@@ -114,7 +114,7 @@ export function StaffModule() {
       if (editId) {
         await api.put(`/staff/${editId}`, body);
       } else {
-        await api.post('/staff', { ...form });
+        await api.post('/staff', { ...form, display_name: displayName });
       }
       setShowForm(false);
       load();
