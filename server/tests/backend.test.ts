@@ -85,6 +85,12 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
     ).run(sourceService, sourceCounter);
     const ticketId = Number(ticketResult.lastInsertRowid);
     db.prepare(
+      "INSERT INTO tickets (number, service_id, status, priority, business_date, created_at) VALUES (?, ?, 'completed', 'normal', ?, ?)",
+    ).run('9001', sourceService, '2026-11-08', '2026-11-08 09:00:00');
+    db.prepare(
+      "INSERT INTO tickets (number, service_id, status, priority, business_date, created_at) VALUES (?, ?, 'completed', 'normal', ?, ?)",
+    ).run('9002', sourceService, '2026-11-08', '2026-11-08 08:00:00');
+    db.prepare(
       "INSERT INTO queue_events (ticket_id, event_type, from_status, to_status) VALUES (?, 'created', NULL, 'waiting')",
     ).run(ticketId);
 
@@ -107,6 +113,69 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
     assert.equal(legacyResponse.headers.get('cache-control'), 'no-store', 'API responses must not be cached');
     assert.equal(legacyResponse.headers.get('pragma'), 'no-cache', 'API responses must opt out of legacy caches');
     assert.equal(legacyResponse.headers.get('x-powered-by'), null, 'Express fingerprint header must be disabled');
+
+    const firstTicketPage = await fetch(`http://127.0.0.1:${address.port}/api/tickets?page=1&limit=2`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    assert.equal(firstTicketPage.status, 200, await firstTicketPage.text());
+    const firstPageData = await firstTicketPage.json() as {
+      tickets: { number: string }[];
+      pagination: { page: number; limit: number; total: number; totalPages: number; hasNextPage: boolean; hasPreviousPage: boolean };
+    };
+    assert.equal(firstPageData.tickets.length, 2);
+    assert.equal(firstPageData.pagination.page, 1);
+    assert.equal(firstPageData.pagination.limit, 2);
+    assert.equal(firstPageData.pagination.total, 3);
+    assert.equal(firstPageData.pagination.totalPages, 2);
+    assert.equal(firstPageData.pagination.hasNextPage, true);
+    assert.equal(firstPageData.pagination.hasPreviousPage, false);
+    assert.equal(firstPageData.tickets[0].number, '1001', 'newest tickets must appear first');
+    assert.equal(firstPageData.tickets[1].number, '9001');
+
+    const secondTicketPage = await fetch(`http://127.0.0.1:${address.port}/api/tickets?page=2&limit=2`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    assert.equal(secondTicketPage.status, 200, await secondTicketPage.text());
+    const secondPageData = await secondTicketPage.json() as {
+      tickets: { number: string }[];
+      pagination: { page: number; total: number; hasNextPage: boolean; hasPreviousPage: boolean };
+    };
+    assert.deepEqual(secondPageData.tickets.map((ticket) => ticket.number), ['9002']);
+    assert.equal(secondPageData.pagination.total, 3);
+    assert.equal(secondPageData.pagination.hasNextPage, false);
+    assert.equal(secondPageData.pagination.hasPreviousPage, true);
+
+    const filteredTicketPage = await fetch(`http://127.0.0.1:${address.port}/api/tickets?status=completed&serviceId=${sourceService}&page=2&limit=1`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    assert.equal(filteredTicketPage.status, 200, await filteredTicketPage.text());
+    const filteredPageData = await filteredTicketPage.json() as {
+      tickets: { number: string }[];
+      pagination: { total: number; totalPages: number };
+    };
+    assert.deepEqual(filteredPageData.tickets.map((ticket) => ticket.number), ['9002']);
+    assert.equal(filteredPageData.pagination.total, 2);
+    assert.equal(filteredPageData.pagination.totalPages, 2);
+
+    const invalidTicketPage = await fetch(`http://127.0.0.1:${address.port}/api/tickets?page=0`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    assert.equal(invalidTicketPage.status, 400, 'page numbers must be positive whole numbers');
+
+    for (const indexName of [
+      'idx_tickets_created_id',
+      'idx_tickets_status_created_id',
+      'idx_tickets_service_created_id',
+      'idx_tickets_counter_status',
+      'idx_tickets_queue_lookup',
+      'idx_queue_events_ticket_type_id',
+    ]) {
+      assert.ok(
+        db.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name = ?").get(indexName),
+        `migration must create ${indexName}`,
+      );
+    }
+
     const migratedLegacySession = db.prepare('SELECT token FROM sessions WHERE user_id = ? AND token = ?')
       .get(userId, auth.hashToken(legacyToken));
     assert.ok(migratedLegacySession, 'legacy session should be upgraded to a token digest');
