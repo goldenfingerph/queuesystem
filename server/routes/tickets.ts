@@ -39,35 +39,64 @@ export function ticketsRouter(): Router {
     ).get(userId, counterId));
   };
 
-  // List tickets with filters
+  // List tickets with filters and offset-based pagination.
   router.get('/', (req, res) => {
     const db = getDb();
     const status = req.query.status as string | undefined;
     const serviceId = req.query.serviceId as string | undefined;
-    const rawLimit = req.query.limit === undefined ? 100 : Number(req.query.limit);
-    const limit = Number.isInteger(rawLimit) && rawLimit >= 1 ? Math.min(rawLimit, 500) : 100;
+    const rawPage = req.query.page === undefined ? 1 : Number(req.query.page);
+    const rawPageSize = req.query.pageSize === undefined
+      ? (req.query.limit === undefined ? 100 : Number(req.query.limit))
+      : Number(req.query.pageSize);
     const allowedStatuses = new Set(['waiting', 'called', 'serving', 'completed', 'no_show', 'transferred']);
+
+    if (!Number.isSafeInteger(rawPage) || rawPage < 1) {
+      res.status(400).json({ error: 'Invalid page number' }); return;
+    }
+    if (!Number.isSafeInteger(rawPageSize) || rawPageSize < 1 || rawPageSize > 500) {
+      res.status(400).json({ error: 'Invalid page size (must be between 1 and 500)' }); return;
+    }
     if (status && !allowedStatuses.has(status)) {
       res.status(400).json({ error: 'Invalid ticket status filter' }); return;
     }
     if (serviceId && (!Number.isInteger(Number(serviceId)) || Number(serviceId) < 1)) {
       res.status(400).json({ error: 'Invalid service ID filter' }); return;
     }
+
     const where: string[] = [];
     const params: unknown[] = [];
     if (status) { where.push('t.status = ?'); params.push(status); }
-    if (serviceId) { where.push('t.service_id = ?'); params.push(serviceId); }
+    if (serviceId) { where.push('t.service_id = ?'); params.push(Number(serviceId)); }
+    const whereSql = where.length ? 'WHERE ' + where.join(' AND ') : '';
+    const totalRow = db.prepare(`SELECT COUNT(*) AS total FROM tickets t ${whereSql}`)
+      .get(...params) as { total: number };
+    const total = totalRow.total;
+    const offset = (rawPage - 1) * rawPageSize;
+    if (!Number.isSafeInteger(offset)) {
+      res.status(400).json({ error: 'Page number is too large' }); return;
+    }
+
     const sql = `SELECT t.*, s.name AS service_name, s.prefix AS service_prefix,
        c.number AS counter_number, vc.label_en AS category_label, vc.label_ar AS category_label_ar
        FROM tickets t
        LEFT JOIN services s ON s.id = t.service_id
        LEFT JOIN counters c ON c.id = t.counter_id
        LEFT JOIN visitor_categories vc ON vc.id = t.visitor_category_id
-       ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
-       ORDER BY t.created_at DESC LIMIT ?`;
-    params.push(limit);
-    const rows = db.prepare(sql).all(...params);
-    res.json({ tickets: rows });
+       ${whereSql}
+       ORDER BY t.created_at DESC, t.id DESC LIMIT ? OFFSET ?`;
+    const rows = db.prepare(sql).all(...params, rawPageSize, offset);
+    const totalPages = Math.ceil(total / rawPageSize);
+    res.json({
+      tickets: rows,
+      pagination: {
+        page: rawPage,
+        pageSize: rawPageSize,
+        total,
+        totalPages,
+        hasNext: rawPage < totalPages,
+        hasPrevious: rawPage > 1 && total > 0,
+      },
+    });
   });
 
   // Generate a new ticket (reception)
