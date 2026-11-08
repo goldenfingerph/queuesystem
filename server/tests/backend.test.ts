@@ -540,7 +540,8 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
       method: 'POST', headers: { authorization: `Bearer ${adminToken}` }, body: fakeLogoForm,
     });
     assert.equal(fakeLogo.status, 400, 'image content must match its extension');
-    assert.deepEqual(fs.readdirSync(process.env.LOGO_DIR!), [logoRecord.value], 'rejected logo files must be removed from disk');
+    const remainingLogoFiles = fs.existsSync(process.env.LOGO_DIR!) ? fs.readdirSync(process.env.LOGO_DIR!) : [];
+    assert.deepEqual(remainingLogoFiles, [logoRecord.value], 'rejected logo files must be removed from disk');
 
     const oversizedLogoForm = new FormData();
     oversizedLogoForm.append('logo', new Blob([new Uint8Array(5 * 1024 * 1024 + 1)], { type: 'image/png' }), 'oversized.png');
