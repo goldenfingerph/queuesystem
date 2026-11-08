@@ -45,7 +45,7 @@ export function validateServerEnvironment(values: NodeJS.ProcessEnv = process.en
 
   for (const name of ['DB_PATH', 'ADS_DIR', 'LOGO_DIR', 'BACKUPS_DIR'] as const) {
     const value = values[name];
-    if (value !== undefined && (!value.trim() || value.includes(String.fromCharCode(0))) {
+    if (value !== undefined && (!value.trim() || value.includes(String.fromCharCode(0)))) {
       errors.push(`${name} must be a non-empty valid path when configured.`);
     }
   }
