@@ -15,6 +15,7 @@ export const config = {
   adsDir: env.ADS_DIR ?? path.resolve(__dirname, 'public', 'ads'),
   logoDir: env.LOGO_DIR ?? path.resolve(__dirname, 'public', 'logo'),
   backupsDir: env.BACKUPS_DIR ?? path.resolve(__dirname, 'data', 'backups'),
+  queueEventRetentionDays: Number(env.QUEUE_EVENT_RETENTION_DAYS ?? 365),
   // Configure both paths to serve HTTPS and secure WebSockets (WSS).
   tlsCertFile: env.TLS_CERT_FILE ? path.resolve(env.TLS_CERT_FILE) : null,
   tlsKeyFile: env.TLS_KEY_FILE ? path.resolve(env.TLS_KEY_FILE) : null,
@@ -69,6 +70,12 @@ export function validateServerEnvironment(values: NodeJS.ProcessEnv = process.en
         errors.push(`${name} points to a file that does not exist or cannot be read.`);
       }
     }
+  }
+
+  const retentionText = values.QUEUE_EVENT_RETENTION_DAYS ?? '365';
+  const retentionDays = Number(retentionText);
+  if (!retentionText || String(retentionDays) !== retentionText || !Number.isSafeInteger(retentionDays) || retentionDays < 30 || retentionDays > 3650) {
+    errors.push('QUEUE_EVENT_RETENTION_DAYS must be a whole number from 30 to 3650.');
   }
 
   const bootstrapPassword = values.ADMIN_INITIAL_PASSWORD;
