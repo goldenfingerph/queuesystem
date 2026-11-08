@@ -7,13 +7,13 @@ const env = process.env;
 function readPort(value: string | undefined): number {
   if (value === undefined) return 4000;
   const normalized = value.trim();
-  if (!/^\\d+$/.test(normalized)) {
-    throw new Error(`[config] Invalid PORT "${value}". PORT must be an integer from 1 to 65535.`);
+  if (!/^\d+$/.test(normalized)) {
+    throw new Error(\`[config] Invalid PORT "\${value}". PORT must be an integer from 1 to 65535.\`);
   }
 
   const port = Number(normalized);
   if (!Number.isSafeInteger(port) || port < 1 || port > 65535) {
-    throw new Error(`[config] Invalid PORT "${value}". PORT must be an integer from 1 to 65535.`);
+    throw new Error(\`[config] Invalid PORT "\${value}". PORT must be an integer from 1 to 65535.\`);
   }
   return port;
 }
@@ -22,7 +22,7 @@ function readNonEmpty(name: string, value: string | undefined, fallback: string)
   if (value === undefined) return fallback;
   const normalized = value.trim();
   if (!normalized) {
-    throw new Error(`[config] Invalid ${name}. The value must not be empty.`);
+    throw new Error(\`[config] Invalid \${name}. The value must not be empty.\`);
   }
   return normalized;
 }
