@@ -48,7 +48,9 @@ export function adsManageRouter(): Router {
   }, (req, res) => {
     if (!req.file) { res.status(400).json({ error: 'Choose a supported video file (MP4, WebM, or OGG)' }); return; }
     const extension = path.extname(req.file.originalname).toLowerCase();
-    if (!hasSupportedFileSignature(req.file.path, 'video', extension)) {
+    let validContent = false;
+    try { validContent = hasSupportedFileSignature(req.file.path, 'video', extension); } catch { /* Treat unreadable uploads as invalid. */ }
+    if (!validContent) {
       fs.rmSync(req.file.path, { force: true });
       res.status(400).json({ error: 'The video content does not match its file extension' }); return;
     }
