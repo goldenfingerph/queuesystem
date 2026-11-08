@@ -103,14 +103,18 @@ export function StaffModule() {
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
+    const displayName = form.display_name.trim();
+    if (!displayName || displayName.length > 80) { setError('Display name must be 1–80 characters.'); return; }
+    if (!editId && !/^[a-zA-Z0-9._-]{3,40}$/.test(form.username)) { setError('Username must be 3–40 characters using letters, numbers, dots, underscores, or hyphens.'); return; }
+    if ((!editId || form.password.length > 0) && (form.password.length < 12 || form.password.length > 200)) { setError('Password must be 12–200 characters.'); return; }
     setError('');
     try {
-      const body: Record<string, unknown> = { display_name: form.display_name, role: form.role, is_active: form.is_active };
+      const body: Record<string, unknown> = { display_name: displayName, role: form.role, is_active: form.is_active };
       if (form.password) body.password = form.password;
       if (editId) {
         await api.put(`/staff/${editId}`, body);
       } else {
-        await api.post('/staff', { ...form });
+        await api.post('/staff', { ...form, display_name: displayName });
       }
       setShowForm(false);
       load();
@@ -218,9 +222,9 @@ export function StaffModule() {
               </div>
               {error && <p className="mb-3 rounded-lg bg-error-500/10 px-3 py-2 text-sm text-error-600">{error}</p>}
               <div className="space-y-3">
-                <input className="input-field" placeholder="Display name" value={form.display_name} onChange={(e) => setForm({ ...form, display_name: e.target.value })} required />
-                <input className="input-field" placeholder="Username" value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} required disabled={!!editId} />
-                <input className="input-field" type="password" placeholder={editId ? 'New password (leave blank to keep)' : 'Password'} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required={!editId} />
+                <input className="input-field" placeholder="Display name" value={form.display_name} onChange={(e) => setForm({ ...form, display_name: e.target.value })} maxLength={80} required />
+                <input className="input-field" placeholder="Username" value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} minLength={3} maxLength={40} pattern="[a-zA-Z0-9._-]{3,40}" title="Use 3–40 letters, numbers, dots, underscores, or hyphens." required disabled={!!editId} />
+                <input className="input-field" type="password" placeholder={editId ? 'New password (leave blank to keep)' : 'Password'} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} minLength={12} maxLength={200} autoComplete="new-password" required={!editId} />
                 <select className="input-field" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as StaffRole })}>
                   {STAFF_ROLES.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
                 </select>

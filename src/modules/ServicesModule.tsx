@@ -42,6 +42,18 @@ export function ServicesModule() {
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
+    const name = form.name.trim();
+    const nameAr = form.name_ar.trim();
+    const prefix = form.prefix.trim();
+    if (!name || name.length > 100) { setError('Service name must be 1–100 characters.'); return; }
+    if (!nameAr || nameAr.length > 150) { setError('Arabic service name must be 1–150 characters.'); return; }
+    if (!/^[A-Za-z0-9_-]{2,12}$/.test(form.code)) { setError('Code must be 2–12 letters, numbers, hyphens, or underscores.'); return; }
+    if (!prefix || prefix.length > 12) { setError('Prefix must be 1–12 characters.'); return; }
+    if (form.description.length > 500) { setError('Description must be 500 characters or fewer.'); return; }
+    if (!Number.isInteger(form.avg_duration_sec) || form.avg_duration_sec < 1 || form.avg_duration_sec > 86400) { setError('Average duration must be between 1 and 86400 seconds.'); return; }
+    if (!Number.isInteger(form.ticket_range_start) || !Number.isInteger(form.ticket_range_end) || form.ticket_range_start < 1000 || form.ticket_range_end > 9999 || form.ticket_range_start > form.ticket_range_end) { setError('Enter a valid 4-digit ticket range with start not greater than end.'); return; }
+    const overlaps = services.some((service) => service.id !== editId && !(service.ticket_range_end < form.ticket_range_start || service.ticket_range_start > form.ticket_range_end));
+    if (overlaps) { setError('This ticket number range overlaps another service. Choose a different range.'); return; }
     setError('');
     try {
       if (editId) {
@@ -125,18 +137,19 @@ export function ServicesModule() {
               </div>
               {error && <p className="mb-3 rounded-lg bg-error-500/10 px-3 py-2 text-sm text-error-600">{error}</p>}
               <div className="space-y-3">
-                <input className="input-field" placeholder="Service name (English)" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
-                <input className="input-field text-right" dir="rtl" placeholder="اسم الخدمة باللغة العربية (Arabic service name)" value={form.name_ar} onChange={(e) => setForm({ ...form, name_ar: e.target.value })} required />
+                <input className="input-field" placeholder="Service name (English)" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} maxLength={100} required />
+                <input className="input-field text-right" dir="rtl" placeholder="اسم الخدمة باللغة العربية (Arabic service name)" value={form.name_ar} onChange={(e) => setForm({ ...form, name_ar: e.target.value })} maxLength={150} required />
                 <div className="grid grid-cols-2 gap-3">
-                  <input className="input-field" placeholder="Code (e.g. NA)" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} required />
-                  <input className="input-field" placeholder="Prefix (e.g. NA)" value={form.prefix} onChange={(e) => setForm({ ...form, prefix: e.target.value })} required />
+                  <input className="input-field" placeholder="Code (e.g. NA)" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} minLength={2} maxLength={12} pattern="[A-Za-z0-9_-]{2,12}" title="Use 2–12 letters, numbers, hyphens, or underscores." required />
+                  <input className="input-field" placeholder="Prefix (e.g. NA)" value={form.prefix} onChange={(e) => setForm({ ...form, prefix: e.target.value })} maxLength={12} required />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <label className="text-xs text-navy-500">Ticket range start<input className="input-field mt-1" type="number" min="1000" max="9999" value={form.ticket_range_start} onChange={(e) => setForm({ ...form, ticket_range_start: Number(e.target.value) })} required /></label>
                   <label className="text-xs text-navy-500">Ticket range end<input className="input-field mt-1" type="number" min="1000" max="9999" value={form.ticket_range_end} onChange={(e) => setForm({ ...form, ticket_range_end: Number(e.target.value) })} required /></label>
                 </div>
+                <label className="block text-xs text-navy-500">Average duration (seconds)<input className="input-field mt-1" type="number" min={1} max={86400} step={1} value={form.avg_duration_sec} onChange={(e) => setForm({ ...form, avg_duration_sec: e.target.value === '' ? 0 : Number(e.target.value) })} required /></label>
                 <p className="text-xs text-navy-400">Each service must have a unique, non-overlapping 4-digit range. Numbering resets daily at 6:00 AM Abu Dhabi time.</p>
-                <textarea className="input-field" placeholder="Description (optional)" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={2} />
+                <textarea className="input-field" placeholder="Description (optional)" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} maxLength={500} rows={2} />
                 <label className="flex items-center gap-2 text-sm text-navy-700">
                   <input type="checkbox" checked={form.is_active} onChange={(e) => setForm({ ...form, is_active: e.target.checked })} /> Active
                 </label>
