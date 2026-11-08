@@ -9,18 +9,41 @@ export function authRouter(): Router {
   const LOGIN_WINDOW_MS = 15 * 60 * 1000;
   const LOGIN_BLOCK_MS = 15 * 60 * 1000;
   const MAX_LOGIN_FAILURES = 5;
+  // A second, IP-wide limit prevents attackers from bypassing the per-account
+  // threshold by rotating through many usernames from the same client.
+  const failedLoginsByIp = new Map<string, { count: number; windowStarted: number; blockedUntil: number }>();
+  const MAX_IP_LOGIN_FAILURES = 30;
 
   const loginKey = (ip: string, username: string) => `${ip}:${username.trim().toLowerCase()}`;
-  const recordLoginFailure = (key: string) => {
+  const recordFailure = (
+    store: Map<string, { count: number; windowStarted: number; blockedUntil: number }>,
+    key: string,
+    threshold: number,
+  ) => {
     const now = Date.now();
-    const current = failedLogins.get(key);
+    const current = store.get(key);
     if (!current || now - current.windowStarted >= LOGIN_WINDOW_MS) {
-      failedLogins.set(key, { count: 1, windowStarted: now, blockedUntil: 0 });
+      store.set(key, { count: 1, windowStarted: now, blockedUntil: 0 });
       return;
     }
     current.count += 1;
-    if (current.count >= MAX_LOGIN_FAILURES) current.blockedUntil = now + LOGIN_BLOCK_MS;
-    failedLogins.set(key, current);
+    if (current.count >= threshold) current.blockedUntil = now + LOGIN_BLOCK_MS;
+    store.set(key, current);
+  };
+
+  const recordLoginFailure = (ip: string, key: string) => {
+    recordFailure(failedLogins, key, MAX_LOGIN_FAILURES);
+    recordFailure(failedLoginsByIp, ip, MAX_IP_LOGIN_FAILURES);
+  };
+
+  const pruneExpiredAttempts = (now: number) => {
+    // Keep the in-memory limiter bounded during long-running LAN deployments.
+    for (const [key, attempt] of failedLogins) {
+      if (now - attempt.windowStarted >= LOGIN_WINDOW_MS && attempt.blockedUntil <= now) failedLogins.delete(key);
+    }
+    for (const [ip, attempt] of failedLoginsByIp) {
+      if (now - attempt.windowStarted >= LOGIN_WINDOW_MS && attempt.blockedUntil <= now) failedLoginsByIp.delete(ip);
+    }
   };
 
   router.post('/login', (req, res) => {
@@ -30,8 +53,15 @@ export function authRouter(): Router {
       res.status(400).json({ error: 'Valid username and password are required' });
       return;
     }
-    const key = loginKey(req.ip || req.socket.remoteAddress || 'unknown', username);
+    const ip = req.ip || req.socket.remoteAddress || 'unknown';
+    const key = loginKey(ip, username);
     const now = Date.now();
+    pruneExpiredAttempts(now);
+    const ipAttempt = failedLoginsByIp.get(ip);
+    if (ipAttempt?.blockedUntil && ipAttempt.blockedUntil > now) {
+      res.status(429).json({ error: 'Too many login attempts from this network address. Please wait 15 minutes and try again.' });
+      return;
+    }
     const attempt = failedLogins.get(key);
     if (attempt?.blockedUntil && attempt.blockedUntil > now) {
       res.status(429).json({ error: 'Too many login attempts. Please wait 15 minutes and try again.' });
@@ -43,7 +73,7 @@ export function authRouter(): Router {
       | { id: number; username: string; password_hash: string; display_name: string; role: string; is_active: number }
       | undefined;
     if (!user || !user.is_active) {
-      recordLoginFailure(key);
+      recordLoginFailure(ip, key);
       res.status(401).json({ error: 'Invalid credentials' });
       return;
     }
@@ -66,7 +96,7 @@ export function authRouter(): Router {
     }
 
     if (!passwordValid) {
-      recordLoginFailure(key);
+      recordLoginFailure(ip, key);
       res.status(401).json({ error: 'Invalid credentials' });
       return;
     }
