@@ -2,18 +2,11 @@ import { Router } from 'express';
 import { getDb } from '../db/index.js';
 import { broadcast } from '../ws/index.js';
 import { requireRole } from '../lib/middleware.js';
+import { getAbuDhabiBusinessDate } from '../../shared/business-date.js';
 
 export function ticketsRouter(): Router {
   const router = Router();
 
-  // Business day starts at 06:00 in Abu Dhabi, independent of server timezone.
-  const businessDate = (): string => {
-    const parts = new Intl.DateTimeFormat('en-CA', {
-      timeZone: 'Asia/Dubai', year: 'numeric', month: '2-digit', day: '2-digit',
-    }).formatToParts(new Date(Date.now() - 6 * 60 * 60 * 1000));
-    const get = (type: string) => parts.find((part) => part.type === type)?.value ?? '';
-    return `${get('year')}-${get('month')}-${get('day')}`;
-  };
 
   const allocateNumber = (serviceId: number, start: number, end: number, day: string): string | null => {
     const db = getDb();
@@ -104,7 +97,7 @@ export function ticketsRouter(): Router {
       priorityRank = vc.priority_rank;
     }
 
-    const day = businessDate();
+    const day = getAbuDhabiBusinessDate();
     const ticket = db.transaction(() => {
       const ticketNumber = allocateNumber(Number(service_id), svc.ticket_range_start, svc.ticket_range_end, day);
       if (!ticketNumber) return null;
