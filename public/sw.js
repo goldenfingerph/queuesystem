@@ -4,7 +4,18 @@ const APP_SHELL = ['/','/index.html','/manifest.webmanifest','/pwa-icon.svg'];
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME)
-      .then((cache) => cache.addAll(APP_SHELL))
+      .then(async (cache) => {
+        await cache.addAll(APP_SHELL);
+        // Precache Vite's hashed entry bundle and stylesheet so the first
+        // installed launch can render offline without an extra online reload.
+        const page = await cache.match('/index.html');
+        if (page) {
+          const html = await page.text();
+          const assets = [...html.matchAll(/(?:src|href)="([^"]+\\/assets\\/[^"]+)"/g)]
+            .map((match) => match[1]);
+          await Promise.all(assets.map((asset) => cache.add(asset).catch(() => undefined)));
+        }
+      })
       .then(() => self.skipWaiting())
   );
 });
