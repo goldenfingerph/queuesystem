@@ -25,7 +25,7 @@ function createQueueServer(app: import('express').Express): QueueServer {
 }
 
 function gracefulShutdown(server: QueueServer, signal: string): void {
-  console.log(`\\n[server] received ${signal}, shutting down...`);
+  console.log(`\n[server] received ${signal}, shutting down...`);
   closeWs();
   server.close((error) => {
     if (error) {
