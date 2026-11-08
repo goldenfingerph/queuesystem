@@ -10,8 +10,8 @@ import { getBusinessDate } from '../../shared/business-date.js';
 
 
 test('business date uses the Abu Dhabi 06:00 boundary regardless of host timezone', () => {
-  assert.equal(getBusinessDate(new Date('2026-11-07T21:59:59.000Z')), '2026-11-07', 'one second before 06:00 Abu Dhabi remains on the previous business day');
-  assert.equal(getBusinessDate(new Date('2026-11-07T22:00:00.000Z')), '2026-11-08', '06:00 Abu Dhabi starts the new business day');
+  assert.equal(getBusinessDate(new Date('2026-11-08T01:59:59.000Z')), '2026-11-07', 'one second before 06:00 Abu Dhabi remains on the previous business day');
+  assert.equal(getBusinessDate(new Date('2026-11-08T02:00:00.000Z')), '2026-11-08', '06:00 Abu Dhabi starts the new business day');
   assert.equal(getBusinessDate(new Date('2024-03-01T01:59:59.000Z')), '2024-02-29', 'business date handles leap-day rollover');
   assert.equal(getBusinessDate(new Date('2024-03-01T02:00:00.000Z')), '2024-03-01', 'business date advances after the 06:00 boundary');
   assert.throws(() => getBusinessDate(new Date(Number.NaN)), /valid date/);
