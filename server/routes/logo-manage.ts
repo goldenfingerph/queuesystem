@@ -5,6 +5,7 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { config } from '../config.js';
 import { getDb } from '../db/index.js';
+import { hasSupportedFileSignature } from '../lib/upload-validation.js';
 
 const allowed = new Set(['.png', '.jpg', '.jpeg', '.webp']);
 const upload = multer({
@@ -24,7 +25,7 @@ const upload = multer({
     const validMime = ['image/png', 'image/jpeg', 'image/webp'].includes(file.mimetype);
     cb(null, allowed.has(ext) && validMime);
   },
-  limits: { fileSize: 5 * 1024 * 1024, files: 1 },
+  limits: { fileSize: 5 * 1024 * 1024, files: 1, fields: 0, parts: 1 },
 });
 
 export function logoManageRouter(): Router {
@@ -38,14 +39,20 @@ export function logoManageRouter(): Router {
   router.post('/upload', (req, res, next) => {
     upload.single('logo')(req, res, (err) => {
       if (err) {
-        res.status(err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE' ? 413 : 400)
-          .json({ error: err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE' ? 'Logo must be 5 MB or smaller' : err.message });
+        const tooLarge = err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE';
+        res.status(tooLarge ? 413 : 400)
+          .json({ error: tooLarge ? 'Logo must be 5 MB or smaller' : 'Invalid logo upload request' });
         return;
       }
       next();
     });
   }, (req, res) => {
     if (!req.file) { res.status(400).json({ error: 'Choose a PNG, JPG, or WebP image' }); return; }
+    const extension = path.extname(req.file.originalname).toLowerCase();
+    if (!hasSupportedFileSignature(req.file.path, 'image', extension)) {
+      fs.rmSync(req.file.path, { force: true });
+      res.status(400).json({ error: 'The image content does not match its file extension' }); return;
+    }
     const db = getDb();
     const previous = db.prepare("SELECT value FROM system_settings WHERE key = 'logo_filename'").get() as { value: string } | undefined;
     db.prepare("INSERT INTO system_settings (key, value, updated_at) VALUES ('logo_filename', ?, datetime('now')) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at")
