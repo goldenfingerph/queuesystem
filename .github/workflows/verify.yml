@@ -26,3 +26,7 @@ jobs:
         run: npm run typecheck
       - name: Build production frontend
         run: npm run build
+      - name: Run backend route and database regression tests
+        run: npm run test:backend
+      - name: Lint frontend and backend
+        run: npm run lint
