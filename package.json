@@ -15,7 +15,6 @@
     "test:backend": "tsx --test server/tests/backend.test.ts"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.118.0",
     "bcryptjs": "^3.0.3",
     "better-sqlite3": "^13.0.3",
     "cors": "^2.8.6",
