@@ -15,14 +15,12 @@ interface WaitingTicket {
 interface Ad { id: number; filename: string; is_active: number; sort_order: number }
 
 export function TvDisplayModule() {
-  const [currentTickets, setCurrentTickets] = useState<CalledTicket[]>([]);
   const [latestTicket, setLatestTicket] = useState<CalledTicket | null>(null);
   const [currentlyServing, setCurrentlyServing] = useState<CalledTicket[]>([]);
   const [waitingTickets, setWaitingTickets] = useState<WaitingTicket[]>([]);
   const [ads, setAds] = useState<Ad[]>([]);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [adsEnabled, setAdsEnabled] = useState(true);
-  const [adsIntervalSec, setAdsIntervalSec] = useState(15);
   // Advertisements are intentionally always muted so queue announcements remain audible.
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const [bellEnabled, setBellEnabled] = useState(true);
@@ -40,8 +38,6 @@ export function TvDisplayModule() {
     api.get<{ logoUrl: string | null }>('/logo').then((r) => setLogoUrl(r.logoUrl ? `${r.logoUrl}?v=${Date.now()}` : null)).catch(() => {});
     api.get<{ settings: Record<string, string> }>('/settings').then((r) => {
       setAdsEnabled(r.settings.ads_enabled === '1');
-      const configuredInterval = Number(r.settings.ads_interval_sec);
-      if (Number.isFinite(configuredInterval)) setAdsIntervalSec(Math.min(360, Math.max(5, configuredInterval)));
       setVoiceEnabled(r.settings.voice_enabled === '1');
       setBellEnabled(r.settings.bell_enabled === '1');
     });
@@ -52,7 +48,6 @@ export function TvDisplayModule() {
   const loadTvQueue = () => {
     api.get<{ currentTickets: CalledTicket[]; latestTicket: CalledTicket | null; currentlyServing: CalledTicket[]; waitingTickets: WaitingTicket[] }>('/tv/queue')
       .then((r) => {
-        setCurrentTickets(r.currentTickets ?? []);
         setLatestTicket(r.latestTicket ?? null);
         setCurrentlyServing(r.currentlyServing ?? []);
         setWaitingTickets(r.waitingTickets ?? []);
@@ -185,7 +180,6 @@ export function TvDisplayModule() {
       for (let attempt = 0; attempt < 5; attempt++) {
         try {
           const result = await api.get<{ currentTickets: CalledTicket[]; latestTicket: CalledTicket | null; currentlyServing: CalledTicket[]; waitingTickets: WaitingTicket[] }>('/tv/queue');
-          setCurrentTickets(result.currentTickets ?? []);
           setLatestTicket(result.latestTicket ?? null);
           setCurrentlyServing(result.currentlyServing ?? []);
           setWaitingTickets(result.waitingTickets ?? []);
