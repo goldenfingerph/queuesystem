@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type Database from 'better-sqlite3';
 
-const BACKUP_FILENAME_PATTERN = /^infinity-backup-[\\dTZ-]+\\.db$/;
+const BACKUP_FILENAME_PATTERN = /^infinity-backup-[\dTZ-]+\.db$/;
 export const DEFAULT_BACKUP_RETENTION_COUNT = 30;
 
 interface BackupRow {
