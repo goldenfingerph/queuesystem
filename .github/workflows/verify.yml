@@ -64,9 +64,10 @@ jobs:
         run: |
           $packageDir = Join-Path $env:RUNNER_TEMP "QueueSystem-Windows"
           New-Item -ItemType Directory -Force -Path $packageDir | Out-Null
-          robocopy . $packageDir /E /XD .git .github node_modules /XF npm-audit.json
+          robocopy . $packageDir /E /XD .git .github node_modules/.cache /XF npm-audit.json
           $robocopyExit = $LASTEXITCODE
           if ($robocopyExit -ge 8) { throw "Failed to stage Windows package (robocopy exit $robocopyExit)" }
+          # Include Windows-built node_modules and dist so the ZIP is ready to run offline.
           # Robocopy uses 1-7 for successful copy outcomes; clear its status for GitHub Actions.
           $global:LASTEXITCODE = 0
           # Use the exact lockfile validated by npm ci and npm audit in this workflow.
@@ -82,7 +83,8 @@ jobs:
           FIRST RUN
           1. Extract this entire ZIP to a writable folder, e.g. C:\QueueSystem.
           2. Install Node.js 22 LTS if it is not already installed.
-          3. Double-click INSTALL-INFINITY-SERVICES.bat and wait for completion.
+          3. Double-click INSTALL-INFINITY-SERVICES.bat to verify bundled dependencies.
+             It will install them only if the bundled Windows dependencies are missing or invalid.
           4. Double-click START-INFINITY-SERVICES.bat.
           5. On this PC, open http://localhost:4000.
           6. From another device on the same private LAN, open http://<SERVER-IP>:4000.
