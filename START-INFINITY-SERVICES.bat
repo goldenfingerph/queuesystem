@@ -5,13 +5,24 @@ cd /d "%~dp0"
 echo ================================================
 echo   INFINITY SERVICES - LOCAL LAN SERVER
 echo ================================================
+
+rem Prefer the Node.js 22 runtime bundled with this package.
+if exist "%~dp0runtime\node\node.exe" set "PATH=%~dp0runtime\node;%PATH%"
+
 where node >nul 2>nul
 if errorlevel 1 (
-  echo Node.js is missing. Install Node.js 22 LTS first.
+  echo Node.js 22 is missing. Re-download the complete Windows package.
   pause
   exit /b 1
 )
-if not exist "node_modules" (
+for /f %%V in ('node -p "Number(process.versions.node.split('.')[0])"') do set NODE_MAJOR=%%V
+if not "%NODE_MAJOR%"=="22" (
+  echo Node.js 22.x is required. Current major version: %NODE_MAJOR%
+  pause
+  exit /b 1
+)
+
+if not exist "node_modules\tsx\dist\cli.mjs" (
   echo Project dependencies are not installed.
   echo Run INSTALL-INFINITY-SERVICES.bat first.
   pause
