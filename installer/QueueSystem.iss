@@ -37,9 +37,9 @@ Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription:
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: ".env;.env.local;.git\*;.github\*;server\data\*;server\certs\*;server\public\ads\*;node_modules\.cache\*"
 
 [Icons]
-Name: "{autoprograms}\QueueSystem\Start QueueSystem Server"; Filename: "{cmd}"; Parameters: "/c """"{app}\START-INFINITY-SERVICES.bat"""""; WorkingDir: "{app}"; IconFilename: "{sys}\imageres.dll"; IconIndex: 15
-Name: "{autoprograms}\QueueSystem\Install or Repair Dependencies"; Filename: "{cmd}"; Parameters: "/c """"{app}\INSTALL-INFINITY-SERVICES.bat"""""; WorkingDir: "{app}"; IconFilename: "{sys}\imageres.dll"; IconIndex: 15
-Name: "{autodesktop}\Start QueueSystem Server"; Filename: "{cmd}"; Parameters: "/c """"{app}\START-INFINITY-SERVICES.bat"""""; WorkingDir: "{app}"; Tasks: desktopicon; IconFilename: "{sys}\imageres.dll"; IconIndex: 15
+Name: "{autoprograms}\QueueSystem\Start QueueSystem Server"; Filename: "{sys}\cmd.exe"; Parameters: "/c """"{app}\START-INFINITY-SERVICES.bat"""""; WorkingDir: "{app}"; IconFilename: "{sys}\imageres.dll"; IconIndex: 15
+Name: "{autoprograms}\QueueSystem\Install or Repair Dependencies"; Filename: "{sys}\cmd.exe"; Parameters: "/c """"{app}\INSTALL-INFINITY-SERVICES.bat"""""; WorkingDir: "{app}"; IconFilename: "{sys}\imageres.dll"; IconIndex: 15
+Name: "{autodesktop}\Start QueueSystem Server"; Filename: "{sys}\cmd.exe"; Parameters: "/c """"{app}\START-INFINITY-SERVICES.bat"""""; WorkingDir: "{app}"; Tasks: desktopicon; IconFilename: "{sys}\imageres.dll"; IconIndex: 15
 
 [Code]
 function InitializeSetup(): Boolean;
@@ -50,7 +50,7 @@ var
 begin
   NodeVersionFile := ExpandConstant('{tmp}\queuesystem-node-version.txt');
   Result := False;
-  if Exec(ExpandConstant('{cmd}'), '/C node --version > "' + NodeVersionFile + '" 2>&1', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+  if Exec(ExpandConstant('{sys}\cmd.exe'), '/C node --version > "' + NodeVersionFile + '" 2>&1', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
   begin
     if (ResultCode = 0) and LoadStringFromFile(NodeVersionFile, NodeVersion) then
     begin
