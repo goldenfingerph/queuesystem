@@ -20,6 +20,7 @@ export function TvDisplayModule() {
   const [waitingTickets, setWaitingTickets] = useState<WaitingTicket[]>([]);
   const [ads, setAds] = useState<Ad[]>([]);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [orgNameEn, setOrgNameEn] = useState('INFINITY SERVICES');
   const [adsEnabled, setAdsEnabled] = useState(true);
   const [adsIntervalSec, setAdsIntervalSec] = useState(15);
   // Advertisements are intentionally always muted so queue announcements remain audible.
@@ -39,6 +40,7 @@ export function TvDisplayModule() {
   useEffect(() => {
     api.get<{ logoUrl: string | null }>('/logo').then((r) => setLogoUrl(r.logoUrl ? `${r.logoUrl}?v=${Date.now()}` : null)).catch(() => {});
     api.get<{ settings: Record<string, string> }>('/settings').then((r) => {
+      setOrgNameEn(r.settings.org_name_en?.trim() || 'INFINITY SERVICES');
       setAdsEnabled(r.settings.ads_enabled === '1');
       const configuredInterval = Number(r.settings.ads_interval_sec);
       if (Number.isFinite(configuredInterval)) setAdsIntervalSec(Math.min(360, Math.max(5, configuredInterval)));
@@ -241,7 +243,7 @@ export function TvDisplayModule() {
             {logoUrl ? <img src={logoUrl} alt="Organization logo" className="h-full w-full rounded-lg object-contain p-0.5" /> : <Tv className="h-6 w-6" strokeWidth={2.2} />}
           </div>
           <div>
-            <p className="text-xl font-bold">INFINITY SERVICES</p>
+            <p className="max-w-[60vw] truncate text-xl font-bold">{orgNameEn}</p>
             <p className="text-base font-semibold text-brand-200">Now Serving <span className="ml-2" dir="rtl" lang="ar">الرقم الحالي</span></p>
           </div>
         </div>
@@ -375,7 +377,7 @@ export function TvDisplayModule() {
             ) : (
               <div className="flex h-full min-h-[150px] flex-col items-center justify-center rounded-2xl bg-gradient-to-br from-navy-800 to-navy-900">
                 <Tv className="mb-4 h-20 w-20 text-navy-400" />
-                <p className="text-xl font-semibold text-navy-200">INFINITY SERVICES</p>
+                <p className="text-xl font-semibold text-navy-200">{orgNameEn}</p>
                 <p className="mt-2 text-base text-navy-300">No advertisements configured <span className="block" dir="rtl" lang="ar">لا توجد إعلانات</span></p>
               </div>
             )}
