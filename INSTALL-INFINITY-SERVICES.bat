@@ -5,18 +5,23 @@ cd /d "%~dp0"
 echo ================================================
 echo   INFINITY SERVICES - FIRST TIME INSTALL
 echo ================================================
+
+rem Prefer the Node.js 22 runtime bundled with this package.
+if exist "%~dp0runtime\node\node.exe" set "PATH=%~dp0runtime\node;%PATH%"
+
 where node >nul 2>nul
 if errorlevel 1 (
-  echo Node.js is not installed.
-  echo Install Node.js 22 LTS, then run this file again.
+  echo Node.js 22 is missing. Re-download the complete Windows package.
+  echo If you removed the bundled runtime, install Node.js 22 LTS.
   start "" "https://nodejs.org/en/download"
   pause
   exit /b 1
 )
 
 for /f %%V in ('node -p "Number(process.versions.node.split('.')[0])"') do set NODE_MAJOR=%%V
-if %NODE_MAJOR% LSS 22 (
-  echo Node.js 22 or newer is required. Current major version: %NODE_MAJOR%
+if not "%NODE_MAJOR%"=="22" (
+  echo Node.js 22.x is required. Current major version: %NODE_MAJOR%
+  echo This application intentionally pins Node.js 22 for native SQLite compatibility.
   pause
   exit /b 1
 )
