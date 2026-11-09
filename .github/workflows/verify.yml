@@ -18,7 +18,7 @@ concurrency:
 jobs:
   windows-build:
     runs-on: windows-2022
-    timeout-minutes: 20
+    timeout-minutes: 30
     permissions:
       contents: read
     steps:
@@ -59,54 +59,117 @@ jobs:
         run: npm run test:backend
       - name: Lint frontend and backend
         run: npm run lint
-      - name: Package Windows 11 test bundle
+      - name: Package self-contained Windows 11 bundle
         shell: pwsh
         run: |
           $packageDir = Join-Path $env:RUNNER_TEMP "QueueSystem-Windows"
           New-Item -ItemType Directory -Force -Path $packageDir | Out-Null
+
+          # Stage the complete application, Windows-built dependencies, and production frontend.
           robocopy . $packageDir /E /XD .git .github node_modules/.cache /XF npm-audit.json
           $robocopyExit = $LASTEXITCODE
           if ($robocopyExit -ge 8) { throw "Failed to stage Windows package (robocopy exit $robocopyExit)" }
-          # Include Windows-built node_modules and dist so the ZIP is ready to run offline.
-          # Robocopy uses 1-7 for successful copy outcomes; clear its status for GitHub Actions.
           $global:LASTEXITCODE = 0
-          # Use the exact lockfile validated by npm ci and npm audit in this workflow.
+
+          # Embed the exact Node.js 22 runtime used to build and test this Windows package.
+          $nodeExe = (Get-Command node.exe).Source
+          $nodeSourceDir = Split-Path -Parent $nodeExe
+          $runtimeDir = Join-Path $packageDir "runtime\node"
+          New-Item -ItemType Directory -Force -Path $runtimeDir | Out-Null
+          Copy-Item -Path (Join-Path $nodeSourceDir "*") -Destination $runtimeDir -Recurse -Force
+
+          # Keep the audited lockfile produced by this workflow.
           Copy-Item -Path "package-lock.json" -Destination (Join-Path $packageDir "package-lock.json") -Force
+
+          # Fail the build if any required runtime or application component is missing.
+          $bundledNode = Join-Path $runtimeDir "node.exe"
+          $requiredPaths = @(
+            $bundledNode,
+            (Join-Path $runtimeDir "npm.cmd"),
+            (Join-Path $packageDir "node_modules\tsx\dist\cli.mjs"),
+            (Join-Path $packageDir "node_modules\better-sqlite3"),
+            (Join-Path $packageDir "dist\index.html"),
+            (Join-Path $packageDir "server\index.ts"),
+            (Join-Path $packageDir "package-lock.json"),
+            (Join-Path $packageDir "INSTALL-INFINITY-SERVICES.bat"),
+            (Join-Path $packageDir "START-INFINITY-SERVICES.bat"),
+            (Join-Path $packageDir "RESTORE-INFINITY-BACKUP.bat")
+          )
+          foreach ($requiredPath in $requiredPaths) {
+            if (-not (Test-Path $requiredPath)) { throw "Required package component missing: $requiredPath" }
+          }
+
+          # Verify the bundled Node runtime and native SQLite binding actually load.
+          Push-Location $packageDir
+          try {
+            & $bundledNode -e "if (Number(process.versions.node.split('.')[0]) !== 22) process.exit(2); require('better-sqlite3'); console.log('Bundled Node.js', process.versions.node, '- better-sqlite3 native binding loaded.');"
+            if ($LASTEXITCODE -ne 0) { throw "Bundled Node.js or better-sqlite3 validation failed." }
+          } finally {
+            Pop-Location
+          }
+
+          # Never ship secrets, live databases, TLS private keys, or local advertisement media.
+          $forbiddenPaths = @(".env", ".env.local", "server\data", "server\certs", "server\public\ads")
+          foreach ($relativePath in $forbiddenPaths) {
+            if (Test-Path (Join-Path $packageDir $relativePath)) { throw "Refusing to package excluded local/private content: $relativePath" }
+          }
+
+          $expandedBytes = (Get-ChildItem -LiteralPath $packageDir -Recurse -File -Force | Measure-Object -Property Length -Sum).Sum
+          $expandedMB = [math]::Round($expandedBytes / 1MB, 1)
+          $nodeVersion = & $bundledNode --version
+          $buildInfo = @"
+          QUEUE SYSTEM - WINDOWS 11 SELF-CONTAINED TEST BUNDLE
+          Source commit: $env:GITHUB_SHA
+          Bundled runtime: Node.js $nodeVersion (Windows x64)
+          Expanded package size: $expandedMB MB
+          Includes: production frontend, backend source, audited dependencies, native SQLite binding, and bundled Node runtime.
+          Excludes: .env secrets, local databases/backups, TLS private keys, and local ad media.
+          "@
+          Set-Content -Path (Join-Path $packageDir "PACKAGE-BUILD-INFO.txt") -Value $buildInfo -Encoding UTF8
+
           $readme = @'
-          QUEUE SYSTEM - WINDOWS 11 TEST PACKAGE
+          QUEUE SYSTEM - WINDOWS 11 SELF-CONTAINED TEST PACKAGE
 
           REQUIREMENTS
           - Windows 10/11 64-bit
-          - Node.js 22 LTS (https://nodejs.org/en/download)
-          - Internet connection for the first dependency installation
+          - No separate Node.js installation is required; Node.js 22 is bundled.
+          - Internet is needed only if bundled dependencies fail validation and npm ci fallback is required.
 
           FIRST RUN
-          1. Extract this entire ZIP to a writable folder, e.g. C:\QueueSystem.
-          2. Install Node.js 22 LTS if it is not already installed.
-          3. Double-click INSTALL-INFINITY-SERVICES.bat to verify bundled dependencies.
-             It will install them only if the bundled Windows dependencies are missing or invalid.
-          4. Double-click START-INFINITY-SERVICES.bat.
-          5. On this PC, open http://localhost:4000.
-          6. From another device on the same private LAN, open http://<SERVER-IP>:4000.
-          7. Keep the server command window open while using the system.
+          1. Extract the complete downloaded ZIP to a writable folder, e.g. C:\QueueSystem.
+          2. Double-click INSTALL-INFINITY-SERVICES.bat.
+          3. Double-click START-INFINITY-SERVICES.bat.
+          4. On this PC, open http://localhost:4000.
+          5. From another device on the same private LAN, open http://<SERVER-IP>:4000.
+          6. Keep the server command window open while using the system.
+
+          DATABASE RESTORE
+          Stop the server first. Keep a separate copy of the current database.
+          Put the selected backup inside server\data\backups and run
+          RESTORE-INFINITY-BACKUP.bat. Never restore over a live database.
 
           DATA SAFETY
-          The application stores its local SQLite database under server\data by default.
-          Back up that folder before replacing or reinstalling an existing instance.
-          Do not extract over an existing live installation or production data folder.
+          The application creates its local SQLite database under server\data.
+          This package intentionally excludes local databases, backups, secrets,
+          TLS private keys, and local advertisement media. Do not extract over an
+          existing live installation or production data folder.
 
           SECURITY
           Default LAN mode is HTTP/WS and is not encrypted. Use only on a trusted private
           network for testing. Configure trusted TLS certificates before exposing it
           beyond a private test LAN. PWA installation on other LAN devices requires HTTPS.
 
-          This is a Windows test bundle, not a signed commercial installer or an
-          independently verified production deployment.
+          This is a self-contained Windows test package, not a signed commercial EXE
+          or an independently verified production deployment.
           '@
           Set-Content -Path (Join-Path $packageDir "WINDOWS-11-TEST-INSTRUCTIONS.txt") -Value $readme -Encoding UTF8
+
           $zipPath = Join-Path $env:RUNNER_TEMP "QueueSystem-Windows11-Test.zip"
           Compress-Archive -Path (Join-Path $packageDir "*") -DestinationPath $zipPath -CompressionLevel Optimal
-          Get-Item $zipPath | Format-List FullName,Length
+          $zip = Get-Item $zipPath
+          Write-Host "Expanded package size: $expandedMB MB ($expandedBytes bytes)"
+          Write-Host "Download ZIP size: $([math]::Round($zip.Length / 1MB, 1)) MB ($($zip.Length) bytes)"
+          Get-FileHash -Path $zipPath -Algorithm SHA256 | Format-List Algorithm,Hash,Path
       - name: Upload Windows 11 test package
         uses: actions/upload-artifact@v4
         with:
