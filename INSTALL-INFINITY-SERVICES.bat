@@ -21,8 +21,19 @@ if %NODE_MAJOR% LSS 22 (
   exit /b 1
 )
 
+echo Checking bundled Windows dependencies...
+if exist "node_modules\tsx\dist\cli.mjs" (
+  node -e "require('better-sqlite3');" >nul 2>nul
+  if not errorlevel 1 (
+    echo Bundled dependencies are present and the SQLite native module loaded.
+    echo No dependency download is needed.
+    goto :installed
+  )
+)
+
+echo Bundled dependencies are missing or invalid.
 echo Installing the locked project dependencies...
-echo Internet is required for this one-time installation.
+echo Internet is required only for this fallback installation.
 call npm ci
 if errorlevel 1 (
   echo.
@@ -31,6 +42,7 @@ if errorlevel 1 (
   exit /b 1
 )
 
+:installed
 echo.
 echo Installation completed. You can now use START-INFINITY-SERVICES.bat.
 pause
