@@ -20,14 +20,19 @@ export function ReceptionModule() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [printSize, setPrintSize] = useState<'58' | '80'>('80');
+  const [orgNameEn, setOrgNameEn] = useState('INFINITY SERVICES');
+  const [orgNameAr, setOrgNameAr] = useState('');
   const { lastMessage } = useWebSocket();
 
   useEffect(() => {
     Promise.all([
       api.get<{ services: Service[] }>('/services'),
       api.get<{ categories: VisitorCategory[] }>('/settings/visitor-categories'),
-    ]).then(([s, c]) => {
+      api.get<{ settings: Record<string, string> }>('/settings'),
+    ]).then(([s, c, settingsResult]) => {
       setServices(s.services.filter((svc) => svc.is_active));
+      setOrgNameEn(settingsResult.settings.org_name_en?.trim() || 'INFINITY SERVICES');
+      setOrgNameAr(settingsResult.settings.org_name_ar?.trim() || '');
       const activeCategories = c.categories.filter((cat) => cat.is_active);
       setCategories(activeCategories);
       const regularCategory = activeCategories.find((cat) => cat.code === 'regular');
@@ -95,7 +100,8 @@ export function ReceptionModule() {
         .footer { flex: 0 0 auto; width: 100%; font-size: ${fontSize - 2}px; color: #555; margin-top: 3mm; border-top: 1px dashed #ccc; padding-top: 1.5mm; line-height: 1.3; }
         .ar { direction: rtl; unicode-bidi: isolate; font-family: Tahoma, Arial, sans-serif; }
       </style></head><body>
-        <div class="header">INFINITY SERVICES</div>
+        <div class="header">\${escapeHtml(orgNameEn)}</div>
+        \${orgNameAr ? \`<div class="sub ar" dir="rtl" lang="ar">\${escapeHtml(orgNameAr)}</div>\` : ''}
         <div class="sub">www.infinity.ae</div>
         <div class="ticket-num">${escapeHtml(lastTicket.number)}</div>
         <div class="service">${escapeHtml(lastTicket.serviceName)}</div><div class="service ar" dir="rtl" lang="ar">${escapeHtml(lastTicket.serviceNameAr)}</div><div class="category">Service · الخدمة</div>
