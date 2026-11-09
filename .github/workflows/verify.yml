@@ -168,6 +168,7 @@ jobs:
       - name: Build Windows Setup Wizard
         shell: pwsh
         run: |
+          $packageDir = Join-Path $env:RUNNER_TEMP "QueueSystem-Windows"
           $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
           if (-not (Test-Path $iscc)) { throw "Inno Setup compiler not found: $iscc" }
           $setupPath = Join-Path $env:RUNNER_TEMP "QueueSystem-Setup.exe"
