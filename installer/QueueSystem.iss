@@ -45,20 +45,10 @@ Name: "{autodesktop}\Start QueueSystem Server"; Filename: "{app}\START-INFINITY-
 function InitializeSetup(): Boolean;
 var
   ResultCode: Integer;
-  NodeVersionFile: String;
-  NodeVersion: String;
 begin
-  NodeVersionFile := ExpandConstant('{tmp}\queuesystem-node-version.txt');
   Result := False;
-  if Exec(ExpandConstant('{sys}\cmd.exe'), '/C node --version > "' + NodeVersionFile + '" 2>&1', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
-  begin
-    if (ResultCode = 0) and LoadStringFromFile(NodeVersionFile, NodeVersion) then
-    begin
-      if Pos('v22.', Trim(NodeVersion)) = 1 then
-        Result := True;
-    end;
-  end;
-  DeleteFile(NodeVersionFile);
+  if Exec(ExpandConstant('{sys}\cmd.exe'), '/C node --version | findstr /b /c:"v22." >nul', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+    Result := (ResultCode = 0);
   if not Result then
     MsgBox('QueueSystem requires Node.js 22.x (64-bit) installed and available in PATH. Install Node.js 22 LTS, then run this setup again.', mbError, MB_OK);
 end;
