@@ -10,8 +10,7 @@ rem This project package uses the system-wide Node.js 22 installation.
 
 where node >nul 2>nul
 if errorlevel 1 (
-  echo Node.js 22 is missing. Re-download the complete Windows package.
-  echo If you removed the bundled runtime, install Node.js 22 LTS.
+  echo Node.js 22 is missing. Install Node.js 22 LTS (64-bit) and try again.
   start "" "https://nodejs.org/en/download"
   pause
   exit /b 1
