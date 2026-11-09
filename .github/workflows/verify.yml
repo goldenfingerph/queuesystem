@@ -74,6 +74,29 @@ jobs:
           # Keep the audited lockfile produced by this workflow.
           Copy-Item -Path "package-lock.json" -Destination (Join-Path $packageDir "package-lock.json") -Force
 
+          # Bundle the exact Node.js 22 x64 runtime used to build and validate native modules.
+          $nodeVersion = (node -p "process.versions.node").Trim()
+          if ($nodeVersion -notmatch '^22\\.') { throw "Expected Node.js 22.x, got $nodeVersion" }
+          $nodeArchiveName = "node-v$nodeVersion-win-x64.zip"
+          $nodeBaseUrl = "https://nodejs.org/dist/v$nodeVersion"
+          $nodeArchive = Join-Path $env:RUNNER_TEMP $nodeArchiveName
+          $nodeSums = Join-Path $env:RUNNER_TEMP "SHASUMS256.txt"
+          Invoke-WebRequest -Uri "$nodeBaseUrl/$nodeArchiveName" -OutFile $nodeArchive
+          Invoke-WebRequest -Uri "$nodeBaseUrl/SHASUMS256.txt" -OutFile $nodeSums
+          $checksumMatch = Select-String -Path $nodeSums -Pattern ("^([0-9a-fA-F]{64})\\s+\\*?" + [regex]::Escape($nodeArchiveName) + "$") | Select-Object -First 1
+          if (-not $checksumMatch) { throw "Official Node.js SHA-256 checksum not found for $nodeArchiveName" }
+          $expectedHash = $checksumMatch.Matches[0].Groups[1].Value.ToUpperInvariant()
+          $actualHash = (Get-FileHash -Path $nodeArchive -Algorithm SHA256).Hash
+          if ($actualHash -ne $expectedHash) { throw "Node.js runtime archive SHA-256 verification failed." }
+          $nodeExtract = Join-Path $env:RUNNER_TEMP "node-runtime-extract"
+          Expand-Archive -Path $nodeArchive -DestinationPath $nodeExtract -Force
+          $nodeHome = Join-Path $packageDir "runtime\\node"
+          New-Item -ItemType Directory -Force -Path $nodeHome | Out-Null
+          Copy-Item -Path (Join-Path $nodeExtract "node-v$nodeVersion-win-x64\\*") -Destination $nodeHome -Recurse -Force
+          if (-not (Test-Path (Join-Path $nodeHome "node.exe")) -or -not (Test-Path (Join-Path $nodeHome "npm.cmd"))) {
+            throw "Bundled Node.js runtime is incomplete (node.exe/npm.cmd missing)."
+          }
+
           # Fail the build if any required application component is missing.
           $requiredPaths = @(
             (Join-Path $packageDir "node_modules\tsx\dist\cli.mjs"),
@@ -89,11 +112,14 @@ jobs:
             if (-not (Test-Path $requiredPath)) { throw "Required package component missing: $requiredPath" }
           }
 
-          # Verify the Windows runner's Node.js 22 and native SQLite binding.
+          # Verify the bundled runtime, npm, and Windows native SQLite binding.
+          $env:PATH = "$nodeHome;$env:PATH"
           Push-Location $packageDir
           try {
-            node -e "if (Number(process.versions.node.split('.')[0]) !== 22) process.exit(2); require('better-sqlite3'); console.log('Node.js', process.versions.node, '- better-sqlite3 native binding loaded.');"
-            if ($LASTEXITCODE -ne 0) { throw "Node.js or better-sqlite3 validation failed." }
+            node -e "if (Number(process.versions.node.split('.')[0]) !== 22) process.exit(2); require('better-sqlite3'); console.log('Bundled Node.js', process.versions.node, '- better-sqlite3 native binding loaded.');"
+            if ($LASTEXITCODE -ne 0) { throw "Bundled Node.js or better-sqlite3 validation failed." }
+            npm --version
+            if ($LASTEXITCODE -ne 0) { throw "Bundled npm validation failed." }
           } finally {
             Pop-Location
           }
@@ -108,21 +134,21 @@ jobs:
           $expandedMB = [math]::Round($expandedBytes / 1MB, 1)
           $nodeVersion = node --version
           $buildInfo = @"
-          QUEUE SYSTEM - WINDOWS 11 PROJECT TEST BUNDLE
+          QUEUE SYSTEM - WINDOWS 11 SELF-CONTAINED PROJECT BUNDLE
           Source commit: $env:GITHUB_SHA
-          Required runtime: Node.js $nodeVersion (Windows x64; supplied by user)
+          Bundled runtime: Node.js $nodeVersion (Windows x64) with npm
           Expanded package size: $expandedMB MB
-          Includes: production frontend, backend source, audited dependencies, native SQLite binding, and Windows launchers. Node.js is not included.
+          Includes: production frontend, backend source, audited dependencies, native SQLite binding, bundled Node.js/npm runtime, and Windows launchers.
           Excludes: .env secrets, local databases/backups, TLS private keys, and local ad media.
           "@
           Set-Content -Path (Join-Path $packageDir "PACKAGE-BUILD-INFO.txt") -Value $buildInfo -Encoding UTF8
 
           $readme = @'
-          QUEUE SYSTEM - WINDOWS 11 PROJECT TEST PACKAGE
+          QUEUE SYSTEM - WINDOWS 11 SELF-CONTAINED PROJECT PACKAGE
 
           REQUIREMENTS
-          - Windows 10/11 64-bit
-          - Node.js 22 LTS (64-bit) must already be installed and available in PATH.
+          - Windows 10/11 64-bit.
+          - Node.js 22 x64 and npm are included in runtime\\node; no system-wide Node.js installation is required.
           - Internet is needed only if bundled dependencies fail validation and npm ci fallback is required.
 
           FIRST RUN
@@ -192,7 +218,7 @@ jobs:
             --repo "$env:GITHUB_REPOSITORY" `
             --target "$env:GITHUB_SHA" `
             --title "QueueSystem Windows 11 Release Candidate" `
-            --notes "Windows 11 x64 setup and project ZIP. Requires Node.js 22 LTS x64. This is an unsigned release candidate; test on a non-production PC and keep existing databases/backups untouched." `
+            --notes "Self-contained Windows 11 x64 setup and project ZIP with bundled Node.js 22 x64/npm runtime and native SQLite dependencies. No system-wide Node.js installation required. Unsigned release candidate; test on a non-production PC and keep existing databases/backups untouched." `
             --prerelease
 
       - name: Stage final release files
@@ -207,8 +233,8 @@ jobs:
           Source commit: $env:GITHUB_SHA
           Installer: QueueSystem-Setup.exe
           Portable project bundle: QueueSystem-Windows11-Project.zip
-          Requires Windows 10/11 x64 and Node.js 22 LTS x64 already installed.
-          The installer does not include Node.js or Python.
+          Requires Windows 10/11 x64 only. Node.js 22 x64 and npm are bundled.
+          No system-wide Node.js installation is required. Python is not required.
           "@ | Set-Content (Join-Path $releaseDir "README-FIRST.txt") -Encoding UTF8
 
       - name: Upload Windows 11 release bundle
