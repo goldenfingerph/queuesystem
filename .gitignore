@@ -21,6 +21,8 @@ dist-ssr
 *.sln
 *.sw?
 .env
+.env.*
+!.env.example
 
 # Local server data (SQLite database, backups, uploaded MP4 ads)
 server/data/
@@ -28,3 +30,6 @@ server/public/ads/
 *.db
 *.db-wal
 *.db-shm
+
+# Private TLS certificate and key files must never be committed.
+server/certs/

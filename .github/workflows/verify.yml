@@ -1,28 +1,220 @@
 name: Verify local LAN queue system
+run-name: Verify ${{ github.event_name }} on ${{ github.ref_name }}
 
 on:
   push:
-    branches: [main, restore-local-sqlite-lan]
+    branches: [main, restore-local-sqlite-lan, windows-batch-security-hardening, stable/windows11-release-candidate]
   pull_request:
     branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 concurrency:
-  group: verify-${{ github.ref }}
+  group: verify-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   windows-build:
     runs-on: windows-2022
-    timeout-minutes: 20
+    timeout-minutes: 30
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
+      - name: Regenerate lockfile from reviewed security overrides
+        run: npm install --package-lock-only --ignore-scripts
       - name: Install locked dependencies
         run: npm ci
+      - name: Apply compatible npm security fixes
+        run: npm audit fix
+      - name: Report npm security audit details
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          npm audit --json > npm-audit.json
+          node -e "const a=JSON.parse(require('fs').readFileSync('npm-audit.json','utf8')); console.log('Vulnerability totals:', JSON.stringify(a.metadata?.vulnerabilities ?? {})); for (const [name,v] of Object.entries(a.vulnerabilities ?? {})) console.log(JSON.stringify({name,severity:v.severity,isDirect:v.isDirect,range:v.range,fixAvailable:v.fixAvailable,via:v.via.map(x=>typeof x==='string'?x:{name:x.name,title:x.title,url:x.url,range:x.range})}));"
+      - name: Enforce clean npm security audit
+        run: npm audit
+      - name: Upload audited lockfile for review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: audited-package-lock
+          path: package-lock.json
+          if-no-files-found: error
+          retention-days: 7
       - name: Type-check frontend and server
         run: npm run typecheck
       - name: Build production frontend
         run: npm run build
+      - name: Run backend route and database regression tests
+        run: npm run test:backend
+      - name: Lint frontend and backend
+        run: npm run lint
+      - name: Package Windows 11 project bundle
+        shell: pwsh
+        run: |
+          $packageDir = Join-Path $env:RUNNER_TEMP "QueueSystem-Windows"
+          New-Item -ItemType Directory -Force -Path $packageDir | Out-Null
+
+          # Stage the complete application, Windows-built dependencies, and production frontend.
+          robocopy . $packageDir /E /XD .git .github node_modules/.cache /XF npm-audit.json
+          $robocopyExit = $LASTEXITCODE
+          if ($robocopyExit -ge 8) { throw "Failed to stage Windows package (robocopy exit $robocopyExit)" }
+          $global:LASTEXITCODE = 0
+
+          # Keep the audited lockfile produced by this workflow.
+          Copy-Item -Path "package-lock.json" -Destination (Join-Path $packageDir "package-lock.json") -Force
+
+          # Fail the build if any required application component is missing.
+          $requiredPaths = @(
+            (Join-Path $packageDir "node_modules\tsx\dist\cli.mjs"),
+            (Join-Path $packageDir "node_modules\better-sqlite3"),
+            (Join-Path $packageDir "dist\index.html"),
+            (Join-Path $packageDir "server\index.ts"),
+            (Join-Path $packageDir "package-lock.json"),
+            (Join-Path $packageDir "INSTALL-INFINITY-SERVICES.bat"),
+            (Join-Path $packageDir "START-INFINITY-SERVICES.bat"),
+            (Join-Path $packageDir "RESTORE-INFINITY-BACKUP.bat")
+          )
+          foreach ($requiredPath in $requiredPaths) {
+            if (-not (Test-Path $requiredPath)) { throw "Required package component missing: $requiredPath" }
+          }
+
+          # Verify the Windows runner's Node.js 22 and native SQLite binding.
+          Push-Location $packageDir
+          try {
+            node -e "if (Number(process.versions.node.split('.')[0]) !== 22) process.exit(2); require('better-sqlite3'); console.log('Node.js', process.versions.node, '- better-sqlite3 native binding loaded.');"
+            if ($LASTEXITCODE -ne 0) { throw "Node.js or better-sqlite3 validation failed." }
+          } finally {
+            Pop-Location
+          }
+
+          # Never ship secrets, live databases, TLS private keys, or local advertisement media.
+          $forbiddenPaths = @(".env", ".env.local", "server\data", "server\certs", "server\public\ads")
+          foreach ($relativePath in $forbiddenPaths) {
+            if (Test-Path (Join-Path $packageDir $relativePath)) { throw "Refusing to package excluded local/private content: $relativePath" }
+          }
+
+          $expandedBytes = (Get-ChildItem -LiteralPath $packageDir -Recurse -File -Force | Measure-Object -Property Length -Sum).Sum
+          $expandedMB = [math]::Round($expandedBytes / 1MB, 1)
+          $nodeVersion = node --version
+          $buildInfo = @"
+          QUEUE SYSTEM - WINDOWS 11 PROJECT TEST BUNDLE
+          Source commit: $env:GITHUB_SHA
+          Required runtime: Node.js $nodeVersion (Windows x64; supplied by user)
+          Expanded package size: $expandedMB MB
+          Includes: production frontend, backend source, audited dependencies, native SQLite binding, and Windows launchers. Node.js is not included.
+          Excludes: .env secrets, local databases/backups, TLS private keys, and local ad media.
+          "@
+          Set-Content -Path (Join-Path $packageDir "PACKAGE-BUILD-INFO.txt") -Value $buildInfo -Encoding UTF8
+
+          $readme = @'
+          QUEUE SYSTEM - WINDOWS 11 PROJECT TEST PACKAGE
+
+          REQUIREMENTS
+          - Windows 10/11 64-bit
+          - Node.js 22 LTS (64-bit) must already be installed and available in PATH.
+          - Internet is needed only if bundled dependencies fail validation and npm ci fallback is required.
+
+          FIRST RUN
+          1. Extract the complete downloaded ZIP to a writable folder, e.g. C:\QueueSystem.
+          2. Double-click INSTALL-INFINITY-SERVICES.bat.
+          3. Double-click START-INFINITY-SERVICES.bat.
+          4. On this PC, open http://localhost:4000.
+          5. From another device on the same private LAN, open http://<SERVER-IP>:4000.
+          6. Keep the server command window open while using the system.
+
+          DATABASE RESTORE
+          Stop the server first. Keep a separate copy of the current database.
+          Put the selected backup inside server\data\backups and run
+          RESTORE-INFINITY-BACKUP.bat. Never restore over a live database.
+
+          DATA SAFETY
+          The application creates its local SQLite database under server\data.
+          This package intentionally excludes local databases, backups, secrets,
+          TLS private keys, and local advertisement media. Do not extract over an
+          existing live installation or production data folder.
+
+          SECURITY
+          Default LAN mode is HTTP/WS and is not encrypted. Use only on a trusted private
+          network for testing. Configure trusted TLS certificates before exposing it
+          beyond a private test LAN. PWA installation on other LAN devices requires HTTPS.
+
+          This is a Windows project test package, not a signed commercial EXE
+          or an independently verified production deployment.
+          '@
+          Set-Content -Path (Join-Path $packageDir "WINDOWS-11-TEST-INSTRUCTIONS.txt") -Value $readme -Encoding UTF8
+
+          $zipPath = Join-Path $env:RUNNER_TEMP "QueueSystem-Windows11-Project.zip"
+          Compress-Archive -Path (Join-Path $packageDir "*") -DestinationPath $zipPath -CompressionLevel Optimal
+          $zip = Get-Item $zipPath
+          Write-Host "Expanded package size: $expandedMB MB ($expandedBytes bytes)"
+          Write-Host "Project ZIP size: $([math]::Round($zip.Length / 1MB, 1)) MB ($($zip.Length) bytes)"
+          Get-FileHash -Path $zipPath -Algorithm SHA256 | Format-List Algorithm,Hash,Path
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup --no-progress -y
+
+      - name: Build Windows Setup Wizard
+        shell: pwsh
+        run: |
+          $packageDir = Join-Path $env:RUNNER_TEMP "QueueSystem-Windows"
+          $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { throw "Inno Setup compiler not found: $iscc" }
+          $setupPath = Join-Path $env:RUNNER_TEMP "QueueSystem-Setup.exe"
+          & $iscc "/DAppVersion=1.0.0" "/DSourceDir=$packageDir" "/DOutputDir=$env:RUNNER_TEMP" "installer\QueueSystem.iss"
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup compilation failed with exit code $LASTEXITCODE" }
+          if (-not (Test-Path $setupPath)) { throw "Setup Wizard EXE was not created." }
+          $setup = Get-Item $setupPath
+          Write-Host "Setup EXE size: $([math]::Round($setup.Length / 1MB, 1)) MB ($($setup.Length) bytes)"
+          Get-FileHash -Path $setupPath -Algorithm SHA256 | Format-List Algorithm,Hash,Path
+
+      - name: Publish public Windows 11 release candidate assets
+        if: github.event_name == 'push' && github.ref == 'refs/heads/stable/windows11-release-candidate'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "windows11-rc-$($env:GITHUB_SHA.Substring(0,7))"
+          gh release create $tag `
+            "$env:RUNNER_TEMP\QueueSystem-Windows11-Project.zip" `
+            "$env:RUNNER_TEMP\QueueSystem-Setup.exe" `
+            --repo "$env:GITHUB_REPOSITORY" `
+            --target "$env:GITHUB_SHA" `
+            --title "QueueSystem Windows 11 Release Candidate" `
+            --notes "Windows 11 x64 setup and project ZIP. Requires Node.js 22 LTS x64. This is an unsigned release candidate; test on a non-production PC and keep existing databases/backups untouched." `
+            --prerelease
+
+      - name: Stage final release files
+        shell: pwsh
+        run: |
+          $releaseDir = Join-Path $env:RUNNER_TEMP "QueueSystem-Windows11-Release"
+          New-Item -ItemType Directory -Force -Path $releaseDir | Out-Null
+          Copy-Item (Join-Path $env:RUNNER_TEMP "QueueSystem-Windows11-Project.zip") $releaseDir
+          Copy-Item (Join-Path $env:RUNNER_TEMP "QueueSystem-Setup.exe") $releaseDir
+          @"
+          QueueSystem Windows 11 release candidate
+          Source commit: $env:GITHUB_SHA
+          Installer: QueueSystem-Setup.exe
+          Portable project bundle: QueueSystem-Windows11-Project.zip
+          Requires Windows 10/11 x64 and Node.js 22 LTS x64 already installed.
+          The installer does not include Node.js or Python.
+          "@ | Set-Content (Join-Path $releaseDir "README-FIRST.txt") -Encoding UTF8
+
+      - name: Upload Windows 11 release bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: QueueSystem-Windows11-Release
+          path: ${{ runner.temp }}/QueueSystem-Windows11-Release/*
+          if-no-files-found: error
+          retention-days: 30

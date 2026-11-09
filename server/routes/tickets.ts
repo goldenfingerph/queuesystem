@@ -2,18 +2,10 @@ import { Router } from 'express';
 import { getDb } from '../db/index.js';
 import { broadcast } from '../ws/index.js';
 import { requireRole } from '../lib/middleware.js';
+import { getBusinessDate } from '../../shared/business-date.js';
 
 export function ticketsRouter(): Router {
   const router = Router();
-
-  // Business day starts at 06:00 in Abu Dhabi, independent of server timezone.
-  const businessDate = (): string => {
-    const parts = new Intl.DateTimeFormat('en-CA', {
-      timeZone: 'Asia/Dubai', year: 'numeric', month: '2-digit', day: '2-digit',
-    }).formatToParts(new Date(Date.now() - 6 * 60 * 60 * 1000));
-    const get = (type: string) => parts.find((part) => part.type === type)?.value ?? '';
-    return `${get('year')}-${get('month')}-${get('day')}`;
-  };
 
   const allocateNumber = (serviceId: number, start: number, end: number, day: string): string | null => {
     const db = getDb();
@@ -42,32 +34,54 @@ export function ticketsRouter(): Router {
   // List tickets with filters
   router.get('/', (req, res) => {
     const db = getDb();
-    const status = req.query.status as string | undefined;
-    const serviceId = req.query.serviceId as string | undefined;
+    const status = typeof req.query.status === 'string' ? req.query.status : undefined;
+    const serviceId = typeof req.query.serviceId === 'string' ? req.query.serviceId : undefined;
     const rawLimit = req.query.limit === undefined ? 100 : Number(req.query.limit);
     const limit = Number.isInteger(rawLimit) && rawLimit >= 1 ? Math.min(rawLimit, 500) : 100;
+    const rawPage = req.query.page === undefined ? 1 : Number(req.query.page);
+    if (!Number.isSafeInteger(rawPage) || rawPage < 1) {
+      res.status(400).json({ error: 'Page must be a positive whole number' }); return;
+    }
+    const page = rawPage;
+    const offset = (page - 1) * limit;
+    if (!Number.isSafeInteger(offset)) {
+      res.status(400).json({ error: 'Requested page is out of range' }); return;
+    }
     const allowedStatuses = new Set(['waiting', 'called', 'serving', 'completed', 'no_show', 'transferred']);
-    if (status && !allowedStatuses.has(status)) {
+    if (req.query.status !== undefined && (!status || !allowedStatuses.has(status))) {
       res.status(400).json({ error: 'Invalid ticket status filter' }); return;
     }
-    if (serviceId && (!Number.isInteger(Number(serviceId)) || Number(serviceId) < 1)) {
+    if (req.query.serviceId !== undefined && (!serviceId || !Number.isInteger(Number(serviceId)) || Number(serviceId) < 1)) {
       res.status(400).json({ error: 'Invalid service ID filter' }); return;
     }
     const where: string[] = [];
     const params: unknown[] = [];
     if (status) { where.push('t.status = ?'); params.push(status); }
-    if (serviceId) { where.push('t.service_id = ?'); params.push(serviceId); }
+    if (serviceId) { where.push('t.service_id = ?'); params.push(Number(serviceId)); }
+    const whereSql = where.length ? 'WHERE ' + where.join(' AND ') : '';
+    const total = (db.prepare(`SELECT COUNT(*) AS total FROM tickets t ${whereSql}`)
+      .get(...params) as { total: number }).total;
     const sql = `SELECT t.*, s.name AS service_name, s.prefix AS service_prefix,
        c.number AS counter_number, vc.label_en AS category_label, vc.label_ar AS category_label_ar
        FROM tickets t
        LEFT JOIN services s ON s.id = t.service_id
        LEFT JOIN counters c ON c.id = t.counter_id
        LEFT JOIN visitor_categories vc ON vc.id = t.visitor_category_id
-       ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
-       ORDER BY t.created_at DESC LIMIT ?`;
-    params.push(limit);
-    const rows = db.prepare(sql).all(...params);
-    res.json({ tickets: rows });
+       ${whereSql}
+       ORDER BY t.created_at DESC, t.id DESC LIMIT ? OFFSET ?`;
+    const rows = db.prepare(sql).all(...params, limit, offset);
+    const totalPages = Math.ceil(total / limit);
+    res.json({
+      tickets: rows,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1 && total > 0,
+      },
+    });
   });
 
   // Generate a new ticket (reception)
@@ -104,7 +118,7 @@ export function ticketsRouter(): Router {
       priorityRank = vc.priority_rank;
     }
 
-    const day = businessDate();
+    const day = getBusinessDate();
     const ticket = db.transaction(() => {
       const ticketNumber = allocateNumber(Number(service_id), svc.ticket_range_start, svc.ticket_range_end, day);
       if (!ticketNumber) return null;
@@ -319,7 +333,9 @@ export function ticketsRouter(): Router {
       res.status(400).json({ error: 'Ticket is already assigned to the selected counter' }); return;
     }
 
-    if (!canOperateCounter(user_id, req.user?.role, ticket.counter_id)) { res.status(403).json({ error: 'You are not assigned to the ticket counter' }); return; }
+    // A waiting transferred ticket has no current counter_id; use its pinned
+    // queued_for_counter_id to verify the service officer's assignment.
+    if (!canOperateCounter(user_id, req.user?.role, currentCounterId)) { res.status(403).json({ error: 'You are not assigned to the ticket counter' }); return; }
     const targetSvc = db.prepare('SELECT * FROM services WHERE id = ? AND is_active = 1').get(to_service_id) as { id: number; prefix: string; ticket_range_start: number; ticket_range_end: number } | undefined;
     if (!targetSvc) { res.status(404).json({ error: 'Target service not found or inactive' }); return; }
     const targetCounter = db.prepare('SELECT id FROM counters WHERE id = ? AND is_active = 1').get(to_counter_id);

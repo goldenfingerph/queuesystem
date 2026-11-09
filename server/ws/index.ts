@@ -1,14 +1,37 @@
 import { WebSocketServer, WebSocket } from 'ws';
+import type { Server as HttpServer } from 'node:http';
+import type { Server as HttpsServer } from 'node:https';
 
 let wss: WebSocketServer | null = null;
 let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
 const clients = new Set<WebSocket>();
 const aliveClients = new Set<WebSocket>();
 
-export function initWs(server: import('node:http').Server): WebSocketServer {
+export function isAllowedWebSocketOrigin(origin: string | undefined, host: string | undefined, secure: boolean): boolean {
+  if (!origin || !host) return false;
+  try {
+    const parsed = new URL(origin);
+    const expectedProtocol = secure ? 'https:' : 'http:';
+    return parsed.protocol === expectedProtocol && parsed.host.toLowerCase() === host.toLowerCase();
+  } catch {
+    return false;
+  }
+}
+
+export function initWs(server: HttpServer | HttpsServer): WebSocketServer {
   if (wss) return wss;
 
-  wss = new WebSocketServer({ server, path: '/ws' });
+  wss = new WebSocketServer({
+    server,
+    path: '/ws',
+    maxPayload: 64 * 1024,
+    perMessageDeflate: false,
+    verifyClient: (info, done) => {
+      const secure = Boolean((info.req.socket as typeof info.req.socket & { encrypted?: boolean }).encrypted);
+      const allowed = isAllowedWebSocketOrigin(info.origin, info.req.headers.host, secure);
+      done(allowed, allowed ? undefined : 403, 'WebSocket origin is not allowed');
+    },
+  });
   wss.on('connection', (ws) => {
     clients.add(ws);
     aliveClients.add(ws);

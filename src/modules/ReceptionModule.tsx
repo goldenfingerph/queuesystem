@@ -49,7 +49,8 @@ export function ReceptionModule() {
   }, [lastMessage, selectedService]);
 
   const generate = async () => {
-    if (!selectedService) { setError('Please select a service'); return; }
+    if (!selectedService || !services.some((service) => service.id === selectedService)) { setError('Please select an available service.'); return; }
+    if (selectedCategory !== null && !categories.some((category) => category.id === selectedCategory)) { setError('Please select a valid visitor category.'); return; }
     setError('');
     setBusy(true);
     try {

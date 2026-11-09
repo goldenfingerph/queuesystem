@@ -20,6 +20,11 @@ export function generateToken(): string {
   return crypto.randomBytes(32).toString('hex');
 }
 
+// Store only a one-way digest in SQLite; the raw bearer token is returned once.
+export function hashToken(token: string): string {
+  return crypto.createHash('sha256').update(token, 'utf8').digest('hex');
+}
+
 const SESSION_HOURS = 12;
 
 export function sessionExpiry(): string {

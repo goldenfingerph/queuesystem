@@ -36,6 +36,13 @@ export function SystemSettingsModule() {
   }, []);
 
   const saveSettings = async () => {
+    const orgNameEn = (settings.org_name_en ?? '').trim();
+    const orgNameAr = (settings.org_name_ar ?? '').trim();
+    const interval = Number(settings.ads_interval_sec ?? '15');
+    const recentCalls = Number(settings.tv_recent_calls ?? '6');
+    if (!orgNameEn || orgNameEn.length > 120 || !orgNameAr || orgNameAr.length > 120) { setSavedMsg('Organization names are required and must be 120 characters or fewer.'); return; }
+    if (!Number.isInteger(interval) || interval < 5 || interval > 360) { setSavedMsg('Advertisement interval must be a whole number from 5 to 360 seconds.'); return; }
+    if (!Number.isInteger(recentCalls) || recentCalls < 1 || recentCalls > 20) { setSavedMsg('TV recent calls count must be a whole number from 1 to 20.'); return; }
     setSaving(true);
     setSavedMsg('');
     try {
@@ -172,11 +179,11 @@ export function SystemSettingsModule() {
             <div className="space-y-4">
               <div>
                 <label className="mb-1 block text-xs font-medium text-navy-400">Organization Name (EN)</label>
-                <input className="input-field" value={settings.org_name_en ?? ''} onChange={(e) => setSettings({ ...settings, org_name_en: e.target.value })} />
+                <input className="input-field" required maxLength={120} value={settings.org_name_en ?? ''} onChange={(e) => setSettings({ ...settings, org_name_en: e.target.value })} />
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-navy-400">Organization Name (AR)</label>
-                <input className="input-field" dir="rtl" value={settings.org_name_ar ?? ''} onChange={(e) => setSettings({ ...settings, org_name_ar: e.target.value })} />
+                <input className="input-field" required maxLength={120} dir="rtl" value={settings.org_name_ar ?? ''} onChange={(e) => setSettings({ ...settings, org_name_ar: e.target.value })} />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -186,7 +193,7 @@ export function SystemSettingsModule() {
                 </div>
                 <div>
                   <label className="mb-1 block text-xs font-medium text-navy-400">TV Recent Calls Count</label>
-                  <input type="number" className="input-field" value={settings.tv_recent_calls ?? '6'} onChange={(e) => setSettings({ ...settings, tv_recent_calls: e.target.value })} />
+                  <input type="number" min="1" max="20" step="1" className="input-field" value={settings.tv_recent_calls ?? '6'} onChange={(e) => setSettings({ ...settings, tv_recent_calls: e.target.value })} />
                 </div>
                 <div>
                   <label className="mb-1 block text-xs font-medium text-navy-400">Default Language</label>
@@ -259,7 +266,7 @@ export function SystemSettingsModule() {
             <label className="flex cursor-pointer items-center gap-2 rounded-lg border-2 border-dashed border-slate-300 p-4 text-sm text-navy-500 hover:border-brand-400">
               <Upload className="h-5 w-5" />
               {uploading ? 'Uploading...' : 'Click to upload MP4 video'}
-              <input type="file" accept="video/mp4,video/webm" className="hidden" onChange={uploadAd} />
+              <input type="file" accept="video/mp4,video/webm" className="hidden" disabled={uploading} onChange={uploadAd} />
             </label>
           </div>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

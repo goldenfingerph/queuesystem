@@ -1,4 +1,5 @@
 import express, { type Express, type Request, type Response, type NextFunction } from 'express';
+import helmet from 'helmet';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { authMiddleware, requireRole } from './lib/middleware.js';
@@ -29,8 +30,25 @@ const protectUnlessGet = (req: Request, res: Response, next: NextFunction) => {
 export function createApp(): Express {
   const app = express();
   app.disable('x-powered-by');
-  app.use(express.json({ limit: '2mb' }));
-  app.use(express.urlencoded({ extended: true, limit: '2mb' }));
+
+  // Keep Helmet's transport-independent protections while deferring CSP until
+  // the LAN HTTP/HTTPS and TV/WebSocket origins can be configured explicitly.
+  // Helmet still sets frame, MIME, referrer, HSTS, and other security headers.
+  app.use(helmet({ contentSecurityPolicy: false }));
+
+  // API responses can contain staff and queue data. Never let browsers or
+  // intermediary caches retain those responses. Public ad media sets its own
+  // explicit short-lived cache policy in adsRouter().
+  app.use('/api', (req, res, next) => {
+    // Keep the existing short-lived cache policy for public TV advertisement videos.
+    if (req.path.startsWith('/media/ads/')) return next();
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('Pragma', 'no-cache');
+    next();
+  });
+
+  app.use(express.json({ limit: '2mb', strict: true, type: ['application/json', 'application/*+json'] }));
+  app.use(express.urlencoded({ extended: true, limit: '2mb', parameterLimit: 100 }));
 
   app.use(healthRouter());
   app.use('/api/auth', authRouter());
@@ -106,6 +124,7 @@ export function createApp(): Express {
     res.sendFile(path.join(webRoot, 'index.html'), (err) => { if (err) next(err); });
   });
   app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
+    void _next; // Express requires all four error-handler parameters.
     console.error('[http] request failed:', err);
     if (res.headersSent) return;
     res.status(500).json({ error: 'An unexpected server error occurred. Check the server console for details.' });

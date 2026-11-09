@@ -1,20 +1,13 @@
 import { Router } from 'express';
 import { getDb } from '../db/index.js';
-
-const abuDhabiBusinessDate = (): string => {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Dubai', year: 'numeric', month: '2-digit', day: '2-digit',
-  }).formatToParts(new Date(Date.now() - 6 * 60 * 60 * 1000));
-  const get = (type: string) => parts.find((part) => part.type === type)?.value ?? '';
-  return `${get('year')}-${get('month')}-${get('day')}`;
-};
+import { getBusinessDate } from '../../shared/business-date.js';
 
 export function reportsRouter(): Router {
   const router = Router();
 
   router.get('/dashboard', (_req, res) => {
     const db = getDb();
-    const today = abuDhabiBusinessDate();
+    const today = getBusinessDate();
 
     const totals = db.prepare(
       `SELECT
@@ -50,10 +43,74 @@ export function reportsRouter(): Router {
     });
   });
 
+  router.get('/analytics', (req, res) => {
+    const parseDate = (value: unknown): string | null => {
+      if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+      const parsed = new Date(`${value}T00:00:00.000Z`);
+      return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value ? value : null;
+    };
+    const from = parseDate(req.query.from);
+    const to = parseDate(req.query.to);
+    if (!from || !to) return res.status(400).json({ error: 'A valid from and to date are required.' });
+    const rangeDays = (Date.parse(`${to}T00:00:00.000Z`) - Date.parse(`${from}T00:00:00.000Z`)) / 86400000;
+    if (rangeDays < 0) return res.status(400).json({ error: 'The start date must be on or before the end date.' });
+    if (rangeDays > 89) return res.status(400).json({ error: 'Report date ranges cannot exceed 90 days.' });
+
+    let serviceFilter = '';
+    const params: unknown[] = [from, to];
+    if (req.query.serviceId !== undefined && req.query.serviceId !== '') {
+      const serviceId = Number(req.query.serviceId);
+      if (!Number.isSafeInteger(serviceId) || serviceId < 1) return res.status(400).json({ error: 'Service ID must be a positive whole number.' });
+      serviceFilter = ' AND t.service_id = ?';
+      params.push(serviceId);
+    }
+
+    const db = getDb();
+    const daily = db.prepare(
+      `SELECT t.business_date AS date, COUNT(*) AS total,
+        SUM(CASE WHEN t.status = 'completed' THEN 1 ELSE 0 END) AS completed,
+        SUM(CASE WHEN t.status = 'no_show' THEN 1 ELSE 0 END) AS skipped
+       FROM tickets t
+       WHERE t.business_date BETWEEN ? AND ?${serviceFilter}
+       GROUP BY t.business_date ORDER BY t.business_date`,
+    ).all(...params);
+
+    const byService = db.prepare(
+      `SELECT s.id AS serviceId, s.name AS service, COUNT(t.id) AS total,
+        SUM(CASE WHEN t.status = 'waiting' THEN 1 ELSE 0 END) AS waiting,
+        SUM(CASE WHEN t.status IN ('called','serving') THEN 1 ELSE 0 END) AS serving,
+        SUM(CASE WHEN t.status = 'completed' THEN 1 ELSE 0 END) AS completed,
+        SUM(CASE WHEN t.status = 'no_show' THEN 1 ELSE 0 END) AS skipped,
+        ROUND(AVG((julianday(t.called_at) - julianday(t.created_at)) * 86400)) AS avgWaitSeconds,
+        ROUND(AVG((julianday(t.completed_at) - julianday(t.served_at)) * 86400)) AS avgServiceSeconds
+       FROM services s
+       LEFT JOIN tickets t ON t.service_id = s.id AND t.business_date BETWEEN ? AND ?${serviceFilter}
+       GROUP BY s.id HAVING COUNT(t.id) > 0 ORDER BY total DESC, s.name`,
+    ).all(...params);
+
+    const hourly = db.prepare(
+      `SELECT CAST(strftime('%H', t.created_at) AS INTEGER) AS hour, COUNT(*) AS total
+       FROM tickets t
+       WHERE t.business_date BETWEEN ? AND ?${serviceFilter}
+       GROUP BY strftime('%H', t.created_at) ORDER BY hour`,
+    ).all(...params);
+
+    const totals = db.prepare(
+      `SELECT COUNT(*) AS total,
+        SUM(CASE WHEN t.status = 'completed' THEN 1 ELSE 0 END) AS completed,
+        SUM(CASE WHEN t.status = 'no_show' THEN 1 ELSE 0 END) AS skipped,
+        ROUND(AVG((julianday(t.called_at) - julianday(t.created_at)) * 86400)) AS avgWaitSeconds,
+        ROUND(AVG((julianday(t.completed_at) - julianday(t.served_at)) * 86400)) AS avgServiceSeconds
+       FROM tickets t WHERE t.business_date BETWEEN ? AND ?${serviceFilter}`,
+    ).get(...params);
+
+    res.json({ from, to, totals, daily, byService, hourly });
+  });
+
   router.get('/', (req, res) => {
     const db = getDb();
     const date = typeof req.query.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(req.query.date)
-      ? req.query.date : abuDhabiBusinessDate();
+      ? req.query.date : getBusinessDate();
     const serviceId = req.query.serviceId as string | undefined;
 
     let where = 't.business_date = ?';
@@ -90,7 +147,7 @@ export function reportsRouter(): Router {
   router.get('/export', (req, res) => {
     const db = getDb();
     const date = typeof req.query.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(req.query.date)
-      ? req.query.date : abuDhabiBusinessDate();
+      ? req.query.date : getBusinessDate();
     const serviceId = req.query.serviceId as string | undefined;
 
     let where = 't.business_date = ?';
@@ -113,7 +170,9 @@ export function reportsRouter(): Router {
     // CSV quoting alone does not prevent Excel/LibreOffice formula execution.
     const csvCell = (value: unknown): string => {
       let text = String(value ?? '');
-      if (/^[\u0000-\u0020]*[=+\-@]/.test(text)) text = `'${text}`;
+      let firstSignificant = 0;
+      while (firstSignificant < text.length && text.charCodeAt(firstSignificant) <= 0x20) firstSignificant += 1;
+      if ('=+-@'.includes(text[firstSignificant] ?? '\\0')) text = `'${text}`;
       return `"${text.replace(/"/g, '""')}"`;
     };
     const priorityArabic: Record<string, string> = {

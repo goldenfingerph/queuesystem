@@ -5,8 +5,13 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { config } from '../config.js';
 import { getDb } from '../db/index.js';
+import { hasSupportedFileSignature } from '../lib/upload-validation.js';
 
-const allowed = new Set(['.mp4', '.webm', '.ogg']);
+const allowedMimeTypes: Record<string, string[]> = {
+  '.mp4': ['video/mp4'],
+  '.webm': ['video/webm'],
+  '.ogg': ['video/ogg', 'application/ogg'],
+};
 const upload = multer({
   storage: multer.diskStorage({
     destination: (_req, _file, cb) => {
@@ -15,16 +20,15 @@ const upload = multer({
     },
     filename: (_req, file, cb) => {
       const ext = path.extname(file.originalname).toLowerCase();
-      if (!allowed.has(ext)) { cb(new Error('Only MP4, WebM, and OGG video files are allowed'), ''); return; }
+      if (!allowedMimeTypes[ext]) { cb(new Error('Only MP4, WebM, and OGG video files are allowed'), ''); return; }
       cb(null, `ad-${randomUUID()}${ext}`);
     },
   }),
   fileFilter: (_req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
-    const validMime = ['video/mp4', 'video/webm', 'video/ogg', 'application/ogg'].includes(file.mimetype);
-    cb(null, allowed.has(ext) && validMime);
+    cb(null, allowedMimeTypes[ext]?.includes(file.mimetype) ?? false);
   },
-  limits: { fileSize: 250 * 1024 * 1024, files: 1 },
+  limits: { fileSize: 250 * 1024 * 1024, files: 1, fields: 1, parts: 2, fieldSize: 128 },
 });
 
 export function adsManageRouter(): Router {
@@ -37,11 +41,22 @@ export function adsManageRouter(): Router {
 
   router.post('/upload', (req, res, next) => {
     upload.single('video')(req, res, (err) => {
-      if (err) { res.status(err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE' ? 413 : 400).json({ error: err.message }); return; }
+      if (err) {
+        const tooLarge = err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE';
+        res.status(tooLarge ? 413 : 400).json({ error: tooLarge ? 'Video must be 250 MB or smaller' : 'Invalid video upload request' });
+        return;
+      }
       next();
     });
   }, (req, res) => {
     if (!req.file) { res.status(400).json({ error: 'Choose a supported video file (MP4, WebM, or OGG)' }); return; }
+    const extension = path.extname(req.file.originalname).toLowerCase();
+    let validContent = false;
+    try { validContent = hasSupportedFileSignature(req.file.path, 'video', extension); } catch { /* Treat unreadable uploads as invalid. */ }
+    if (!validContent) {
+      fs.rmSync(req.file.path, { force: true });
+      res.status(400).json({ error: 'The video content does not match its file extension' }); return;
+    }
     const duration = req.body.duration_sec === undefined || req.body.duration_sec === '' ? null : Number(req.body.duration_sec);
     if (duration !== null && (!Number.isFinite(duration) || duration < 0 || duration > 86400)) {
       fs.rmSync(req.file.path, { force: true });
@@ -50,7 +65,7 @@ export function adsManageRouter(): Router {
     try {
       const info = getDb().prepare(
         'INSERT INTO ads (filename, original_name, duration_sec, sort_order) VALUES (?, ?, ?, 0)',
-      ).run(req.file.filename, path.basename(req.file.originalname).slice(0, 180), duration);
+      ).run(req.file.filename, path.basename(req.file.originalname.replace(/\\/g, '/')).slice(0, 180), duration);
       res.json({ status: 'ok', id: info.lastInsertRowid, filename: req.file.filename });
     } catch {
       fs.rmSync(req.file.path, { force: true });

@@ -15,7 +15,6 @@ interface WaitingTicket {
 interface Ad { id: number; filename: string; is_active: number; sort_order: number }
 
 export function TvDisplayModule() {
-  const [currentTickets, setCurrentTickets] = useState<CalledTicket[]>([]);
   const [latestTicket, setLatestTicket] = useState<CalledTicket | null>(null);
   const [currentlyServing, setCurrentlyServing] = useState<CalledTicket[]>([]);
   const [waitingTickets, setWaitingTickets] = useState<WaitingTicket[]>([]);
@@ -25,6 +24,8 @@ export function TvDisplayModule() {
   const [adsIntervalSec, setAdsIntervalSec] = useState(15);
   // Advertisements are intentionally always muted so queue announcements remain audible.
   const [voiceEnabled, setVoiceEnabled] = useState(true);
+  const voiceEnabledRef = useRef(voiceEnabled);
+  voiceEnabledRef.current = voiceEnabled;
   const [bellEnabled, setBellEnabled] = useState(true);
   const [currentAd, setCurrentAd] = useState(0);
   const [playing, setPlaying] = useState(true);
@@ -52,7 +53,6 @@ export function TvDisplayModule() {
   const loadTvQueue = () => {
     api.get<{ currentTickets: CalledTicket[]; latestTicket: CalledTicket | null; currentlyServing: CalledTicket[]; waitingTickets: WaitingTicket[] }>('/tv/queue')
       .then((r) => {
-        setCurrentTickets(r.currentTickets ?? []);
         setLatestTicket(r.latestTicket ?? null);
         setCurrentlyServing(r.currentlyServing ?? []);
         setWaitingTickets(r.waitingTickets ?? []);
@@ -71,6 +71,14 @@ export function TvDisplayModule() {
   }, []);
 
   const handleVoiceButton = async () => {
+    // Once browser audio has been unlocked, the same control toggles announcements.
+    if (audioUnlocked && voiceEnabled) {
+      voiceEnabledRef.current = false;
+      if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+      setVoiceEnabled(false);
+      return;
+    }
+
     // This must run directly from the user's click so browsers can unlock audio.
     try {
       let context = audioContextRef.current;
@@ -93,6 +101,7 @@ export function TvDisplayModule() {
       }
 
       setAudioUnlocked(true);
+      voiceEnabledRef.current = true;
       setVoiceEnabled(true);
       if ('speechSynthesis' in window) {
         window.speechSynthesis.cancel();
@@ -145,8 +154,9 @@ export function TvDisplayModule() {
       // Browser speechSynthesis cannot be routed through Web Audio for true reverb,
       // so this quietly repeats the destination phrase once to create a subtle hall-like tail.
       utter.onend = () => {
+        if (!voiceEnabledRef.current) return;
         window.setTimeout(() => {
-          if (!('speechSynthesis' in window)) return;
+          if (!voiceEnabledRef.current || !('speechSynthesis' in window)) return;
           const echo = new SpeechSynthesisUtterance(
             `Please proceed to counter ${ticket.counter_number}.`
           );
@@ -185,7 +195,6 @@ export function TvDisplayModule() {
       for (let attempt = 0; attempt < 5; attempt++) {
         try {
           const result = await api.get<{ currentTickets: CalledTicket[]; latestTicket: CalledTicket | null; currentlyServing: CalledTicket[]; waitingTickets: WaitingTicket[] }>('/tv/queue');
-          setCurrentTickets(result.currentTickets ?? []);
           setLatestTicket(result.latestTicket ?? null);
           setCurrentlyServing(result.currentlyServing ?? []);
           setWaitingTickets(result.waitingTickets ?? []);
@@ -214,6 +223,16 @@ export function TvDisplayModule() {
 
   const activeAds = adsEnabled ? ads.filter((a) => a.is_active) : [];
 
+  // Rotate ads at the configured interval even when a video is longer than
+  // the selected display interval. Shorter videos still advance on onEnded.
+  useEffect(() => {
+    if (!playing || activeAds.length < 2) return;
+    const timer = window.setTimeout(() => {
+      setCurrentAd((previous) => (previous + 1) % activeAds.length);
+    }, adsIntervalSec * 1000);
+    return () => window.clearTimeout(timer);
+  }, [activeAds.length, adsIntervalSec, currentAd, playing]);
+
   return (
     <div className="flex h-screen flex-col bg-navy-950 text-white">
       {/* Header */}
@@ -228,7 +247,7 @@ export function TvDisplayModule() {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <button onClick={handleVoiceButton} className="rounded-lg bg-white/10 p-2 hover:bg-white/20" title={audioUnlocked ? "Toggle voice" : "Enable voice announcements"}>
+          <button onClick={handleVoiceButton} className="rounded-lg bg-white/10 p-2 hover:bg-white/20" title={audioUnlocked && voiceEnabled ? "Disable voice announcements" : "Enable voice announcements"}>
             {voiceEnabled ? <Volume2 className="h-5 w-5" /> : <VolumeX className="h-5 w-5" />}
           </button>
           <button onClick={() => setPlaying(!playing)} className="rounded-lg bg-white/10 p-2 hover:bg-white/20" title="Toggle ads">

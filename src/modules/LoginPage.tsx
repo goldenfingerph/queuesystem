@@ -49,6 +49,10 @@ export function LoginPage() {
             <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-navy-500">Username</label>
             <input
               type="text"
+              name="username"
+              autoComplete="username"
+              required
+              maxLength={64}
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               autoFocus
@@ -60,6 +64,10 @@ export function LoginPage() {
             <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-navy-500">Password</label>
             <input
               type="password"
+              name="password"
+              autoComplete="current-password"
+              required
+              maxLength={128}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none transition-all focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
