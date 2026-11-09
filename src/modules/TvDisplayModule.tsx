@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { Bell, VolumeX, Tv, Play, Pause, Speaker, Megaphone, ChevronLeft, Eye, EyeOff } from 'lucide-react';
+import { Bell, VolumeX, Tv, Speaker, Megaphone, ChevronLeft } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useWebSocket } from '@/lib/useWebSocket';
 
@@ -27,9 +27,7 @@ export function TvDisplayModule() {
   const voiceEnabledRef = useRef(voiceEnabled);
   voiceEnabledRef.current = voiceEnabled;
   const [bellEnabled, setBellEnabled] = useState(true);
-  const [autoHideToolbar, setAutoHideToolbar] = useState(true);
   const [currentAd, setCurrentAd] = useState(0);
-  const [playing, setPlaying] = useState(true);
   const [adPlaybackError, setAdPlaybackError] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -227,12 +225,12 @@ export function TvDisplayModule() {
   // Rotate ads at the configured interval even when a video is longer than
   // the selected display interval. Shorter videos still advance on onEnded.
   useEffect(() => {
-    if (!playing || activeAds.length < 2) return;
+    if (activeAds.length < 2) return;
     const timer = window.setTimeout(() => {
       setCurrentAd((previous) => (previous + 1) % activeAds.length);
     }, adsIntervalSec * 1000);
     return () => window.clearTimeout(timer);
-  }, [activeAds.length, adsIntervalSec, currentAd, playing]);
+  }, [activeAds.length, adsIntervalSec, currentAd]);
 
   return (
     <div className="flex h-screen flex-col bg-navy-950 text-white">
@@ -248,21 +246,17 @@ export function TvDisplayModule() {
           </div>
         </div>
         <div className="group fixed right-4 top-4 z-50 flex items-center gap-2 rounded-xl border border-white/15 bg-navy-950/90 p-2 shadow-2xl backdrop-blur-md">
-          <span className="rounded-lg bg-white/10 p-2 text-white" title="Display controls"><ChevronLeft className="h-5 w-5" /></span>
-          <div className={`flex items-center gap-2 transition-all duration-200 ${autoHideToolbar ? 'pointer-events-none max-w-0 overflow-hidden opacity-0 group-hover:pointer-events-auto group-hover:max-w-[420px] group-hover:opacity-100' : 'max-w-[420px] opacity-100'}`}>
-            <button onClick={() => setBellEnabled((enabled) => !enabled)} className="rounded-lg bg-white/10 p-2 text-white hover:bg-white/20" title={bellEnabled ? "Turn speaker chime off" : "Turn speaker chime on"} aria-label="Toggle speaker chime">
+          <button type="button" className="rounded-lg bg-white/10 p-2 text-white hover:bg-white/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-400" title="Hover to show display controls" aria-label="Show display controls">
+            <ChevronLeft className="h-5 w-5" />
+          </button>
+          <div className="pointer-events-none flex max-w-0 items-center gap-2 overflow-hidden opacity-0 transition-all duration-200 group-hover:pointer-events-auto group-hover:max-w-[240px] group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:max-w-[240px] group-focus-within:opacity-100">
+            <button onClick={() => setBellEnabled((enabled) => !enabled)} className="shrink-0 rounded-lg bg-white/10 p-2 text-white hover:bg-white/20" title={bellEnabled ? "Turn speaker chime off" : "Turn speaker chime on"} aria-label="Toggle speaker chime">
               {bellEnabled ? <Speaker className="h-5 w-5" /> : <VolumeX className="h-5 w-5" />}
             </button>
-            <button onClick={handleVoiceButton} className="rounded-lg bg-white/10 p-2 text-white hover:bg-white/20" title={voiceEnabled ? "Disable voice announcements" : "Enable voice announcements"} aria-label="Toggle voice announcements">
+            <button onClick={handleVoiceButton} className="shrink-0 rounded-lg bg-white/10 p-2 text-white hover:bg-white/20" title={voiceEnabled ? "Disable voice announcements" : "Enable voice announcements"} aria-label="Toggle voice announcements">
               {voiceEnabled ? <Megaphone className="h-5 w-5" /> : <VolumeX className="h-5 w-5" />}
             </button>
-            <button onClick={() => setPlaying(!playing)} className="rounded-lg bg-white/10 p-2 text-white hover:bg-white/20" title={playing ? "Pause advertisements" : "Play advertisements"} aria-label="Toggle advertisements">
-              {playing ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
-            </button>
-            <a href="#/" className="whitespace-nowrap rounded-lg bg-white/10 px-3 py-2 text-xs text-white hover:bg-white/20">Back to App</a>
-            <button onClick={() => setAutoHideToolbar((enabled) => !enabled)} className="rounded-lg bg-white/10 p-2 text-white hover:bg-white/20" title={autoHideToolbar ? "Keep toolbar visible" : "Auto-hide toolbar"} aria-label="Toggle auto-hide">
-              {autoHideToolbar ? <Eye className="h-5 w-5" /> : <EyeOff className="h-5 w-5" />}
-            </button>
+            <a href="#/" className="shrink-0 whitespace-nowrap rounded-lg bg-white/10 px-3 py-2 text-xs text-white hover:bg-white/20">Back to App</a>
           </div>
         </div>
       </div>
@@ -334,7 +328,7 @@ export function TvDisplayModule() {
 
           {/* Advertisement */}
           <div className="min-h-[150px] flex-1">
-            {activeAds.length > 0 && playing ? (
+            {activeAds.length > 0 ? (
               <div className="relative flex h-full min-h-[150px] items-center justify-center overflow-hidden rounded-2xl bg-black">
                 <video
                   key={activeAds[currentAd % activeAds.length].id}
