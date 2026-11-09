@@ -6,8 +6,7 @@ echo ================================================
 echo   INFINITY SERVICES - LOCAL LAN SERVER
 echo ================================================
 
-rem Prefer the Node.js 22 runtime bundled with this package.
-if exist "%~dp0runtime\node\node.exe" set "PATH=%~dp0runtime\node;%PATH%"
+rem This project package uses the system-wide Node.js 22 installation.
 
 where node >nul 2>nul
 if errorlevel 1 (
