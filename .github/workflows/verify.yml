@@ -59,7 +59,7 @@ jobs:
         run: npm run test:backend
       - name: Lint frontend and backend
         run: npm run lint
-      - name: Package self-contained Windows 11 bundle
+      - name: Package Windows 11 project bundle
         shell: pwsh
         run: |
           $packageDir = Join-Path $env:RUNNER_TEMP "QueueSystem-Windows"
@@ -71,21 +71,11 @@ jobs:
           if ($robocopyExit -ge 8) { throw "Failed to stage Windows package (robocopy exit $robocopyExit)" }
           $global:LASTEXITCODE = 0
 
-          # Embed the exact Node.js 22 runtime used to build and test this Windows package.
-          $nodeExe = (Get-Command node.exe).Source
-          $nodeSourceDir = Split-Path -Parent $nodeExe
-          $runtimeDir = Join-Path $packageDir "runtime\node"
-          New-Item -ItemType Directory -Force -Path $runtimeDir | Out-Null
-          Copy-Item -Path (Join-Path $nodeSourceDir "*") -Destination $runtimeDir -Recurse -Force
-
           # Keep the audited lockfile produced by this workflow.
           Copy-Item -Path "package-lock.json" -Destination (Join-Path $packageDir "package-lock.json") -Force
 
-          # Fail the build if any required runtime or application component is missing.
-          $bundledNode = Join-Path $runtimeDir "node.exe"
+          # Fail the build if any required application component is missing.
           $requiredPaths = @(
-            $bundledNode,
-            (Join-Path $runtimeDir "npm.cmd"),
             (Join-Path $packageDir "node_modules\tsx\dist\cli.mjs"),
             (Join-Path $packageDir "node_modules\better-sqlite3"),
             (Join-Path $packageDir "dist\index.html"),
@@ -99,11 +89,11 @@ jobs:
             if (-not (Test-Path $requiredPath)) { throw "Required package component missing: $requiredPath" }
           }
 
-          # Verify the bundled Node runtime and native SQLite binding actually load.
+          # Verify the Windows runner's Node.js 22 and native SQLite binding.
           Push-Location $packageDir
           try {
-            & $bundledNode -e "if (Number(process.versions.node.split('.')[0]) !== 22) process.exit(2); require('better-sqlite3'); console.log('Bundled Node.js', process.versions.node, '- better-sqlite3 native binding loaded.');"
-            if ($LASTEXITCODE -ne 0) { throw "Bundled Node.js or better-sqlite3 validation failed." }
+            node -e "if (Number(process.versions.node.split('.')[0]) !== 22) process.exit(2); require('better-sqlite3'); console.log('Node.js', process.versions.node, '- better-sqlite3 native binding loaded.');"
+            if ($LASTEXITCODE -ne 0) { throw "Node.js or better-sqlite3 validation failed." }
           } finally {
             Pop-Location
           }
@@ -116,23 +106,23 @@ jobs:
 
           $expandedBytes = (Get-ChildItem -LiteralPath $packageDir -Recurse -File -Force | Measure-Object -Property Length -Sum).Sum
           $expandedMB = [math]::Round($expandedBytes / 1MB, 1)
-          $nodeVersion = & $bundledNode --version
+          $nodeVersion = node --version
           $buildInfo = @"
-          QUEUE SYSTEM - WINDOWS 11 SELF-CONTAINED TEST BUNDLE
+          QUEUE SYSTEM - WINDOWS 11 PROJECT TEST BUNDLE
           Source commit: $env:GITHUB_SHA
-          Bundled runtime: Node.js $nodeVersion (Windows x64)
+          Required runtime: Node.js $nodeVersion (Windows x64; supplied by user)
           Expanded package size: $expandedMB MB
-          Includes: production frontend, backend source, audited dependencies, native SQLite binding, and bundled Node runtime.
+          Includes: production frontend, backend source, audited dependencies, native SQLite binding, and Windows launchers. Node.js is not included.
           Excludes: .env secrets, local databases/backups, TLS private keys, and local ad media.
           "@
           Set-Content -Path (Join-Path $packageDir "PACKAGE-BUILD-INFO.txt") -Value $buildInfo -Encoding UTF8
 
           $readme = @'
-          QUEUE SYSTEM - WINDOWS 11 SELF-CONTAINED TEST PACKAGE
+          QUEUE SYSTEM - WINDOWS 11 PROJECT TEST PACKAGE
 
           REQUIREMENTS
           - Windows 10/11 64-bit
-          - No separate Node.js installation is required; Node.js 22 is bundled.
+          - Node.js 22 LTS (64-bit) must already be installed and available in PATH.
           - Internet is needed only if bundled dependencies fail validation and npm ci fallback is required.
 
           FIRST RUN
@@ -159,7 +149,7 @@ jobs:
           network for testing. Configure trusted TLS certificates before exposing it
           beyond a private test LAN. PWA installation on other LAN devices requires HTTPS.
 
-          This is a self-contained Windows test package, not a signed commercial EXE
+          This is a Windows project test package, not a signed commercial EXE
           or an independently verified production deployment.
           '@
           Set-Content -Path (Join-Path $packageDir "WINDOWS-11-TEST-INSTRUCTIONS.txt") -Value $readme -Encoding UTF8
@@ -173,7 +163,7 @@ jobs:
       - name: Upload Windows 11 test package
         uses: actions/upload-artifact@v4
         with:
-          name: QueueSystem-Windows11-Test
+          name: QueueSystem-Windows11-Project
           path: ${{ runner.temp }}/QueueSystem-Windows11-Test.zip
           if-no-files-found: error
           retention-days: 30
