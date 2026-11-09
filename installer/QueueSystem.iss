@@ -34,7 +34,7 @@ SetupLogging=yes
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional shortcuts:"; Flags: unchecked
 
 [Files]
-Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: ".env,.env.local,.git\*,.github\*,server\data\*,server\certs\*,server\public\ads\*,node_modules\.cache\*"
+Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: ".env;.env.local;.git\*;.github\*;server\data\*;server\certs\*;server\public\ads\*;node_modules\.cache\*"
 
 [Icons]
 Name: "{autoprograms}\QueueSystem\Start QueueSystem Server"; Filename: "{cmd}"; Parameters: "/c """"{app}\START-INFINITY-SERVICES.bat"""""; WorkingDir: "{app}"; IconFilename: "{sys}\imageres.dll"; IconIndex: 15
