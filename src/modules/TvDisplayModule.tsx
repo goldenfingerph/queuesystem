@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { Bell, Volume2, VolumeX, Tv, Play, Pause } from 'lucide-react';
+import { Bell, Volume2, VolumeX, Tv, Play, Pause, Speaker, SpeakerX, Megaphone, ChevronLeft, Eye, EyeOff } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useWebSocket } from '@/lib/useWebSocket';
 
@@ -27,6 +27,7 @@ export function TvDisplayModule() {
   const voiceEnabledRef = useRef(voiceEnabled);
   voiceEnabledRef.current = voiceEnabled;
   const [bellEnabled, setBellEnabled] = useState(true);
+  const [autoHideToolbar, setAutoHideToolbar] = useState(true);
   const [currentAd, setCurrentAd] = useState(0);
   const [playing, setPlaying] = useState(true);
   const [adPlaybackError, setAdPlaybackError] = useState<string | null>(null);
@@ -246,14 +247,23 @@ export function TvDisplayModule() {
             <p className="text-base font-semibold text-brand-200">Now Serving <span className="ml-2" dir="rtl" lang="ar">الرقم الحالي</span></p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          <button onClick={handleVoiceButton} className="rounded-lg bg-white/10 p-2 hover:bg-white/20" title={audioUnlocked && voiceEnabled ? "Disable voice announcements" : "Enable voice announcements"}>
-            {voiceEnabled ? <Volume2 className="h-5 w-5" /> : <VolumeX className="h-5 w-5" />}
-          </button>
-          <button onClick={() => setPlaying(!playing)} className="rounded-lg bg-white/10 p-2 hover:bg-white/20" title="Toggle ads">
-            {playing ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
-          </button>
-          <a href="#/" className="rounded-lg bg-white/10 px-3 py-2 text-xs hover:bg-white/20">Back to App</a>
+        <div className="group fixed right-4 top-4 z-50 flex items-center gap-2 rounded-xl border border-white/15 bg-navy-950/90 p-2 shadow-2xl backdrop-blur-md">
+          <span className="rounded-lg bg-white/10 p-2 text-white" title="Display controls"><ChevronLeft className="h-5 w-5" /></span>
+          <div className={`flex items-center gap-2 transition-all duration-200 ${autoHideToolbar ? 'pointer-events-none max-w-0 overflow-hidden opacity-0 group-hover:pointer-events-auto group-hover:max-w-[420px] group-hover:opacity-100' : 'max-w-[420px] opacity-100'}`}>
+            <button onClick={() => setBellEnabled((enabled) => !enabled)} className="rounded-lg bg-white/10 p-2 text-white hover:bg-white/20" title={bellEnabled ? "Turn speaker chime off" : "Turn speaker chime on"} aria-label="Toggle speaker chime">
+              {bellEnabled ? <Speaker className="h-5 w-5" /> : <SpeakerX className="h-5 w-5" />}
+            </button>
+            <button onClick={handleVoiceButton} className="rounded-lg bg-white/10 p-2 text-white hover:bg-white/20" title={voiceEnabled ? "Disable voice announcements" : "Enable voice announcements"} aria-label="Toggle voice announcements">
+              {voiceEnabled ? <Megaphone className="h-5 w-5" /> : <VolumeX className="h-5 w-5" />}
+            </button>
+            <button onClick={() => setPlaying(!playing)} className="rounded-lg bg-white/10 p-2 text-white hover:bg-white/20" title={playing ? "Pause advertisements" : "Play advertisements"} aria-label="Toggle advertisements">
+              {playing ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
+            </button>
+            <a href="#/" className="whitespace-nowrap rounded-lg bg-white/10 px-3 py-2 text-xs text-white hover:bg-white/20">Back to App</a>
+            <button onClick={() => setAutoHideToolbar((enabled) => !enabled)} className="rounded-lg bg-white/10 p-2 text-white hover:bg-white/20" title={autoHideToolbar ? "Keep toolbar visible" : "Auto-hide toolbar"} aria-label="Toggle auto-hide">
+              {autoHideToolbar ? <Eye className="h-5 w-5" /> : <EyeOff className="h-5 w-5" />}
+            </button>
+          </div>
         </div>
       </div>
 
