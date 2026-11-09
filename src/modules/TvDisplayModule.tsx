@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { Bell, Volume2, VolumeX, Tv, Play, Pause, Speaker, SpeakerX, Megaphone, ChevronLeft, Eye, EyeOff } from 'lucide-react';
+import { Bell, VolumeX, Tv, Play, Pause, Speaker, Megaphone, ChevronLeft, Eye, EyeOff } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useWebSocket } from '@/lib/useWebSocket';
 
@@ -251,7 +251,7 @@ export function TvDisplayModule() {
           <span className="rounded-lg bg-white/10 p-2 text-white" title="Display controls"><ChevronLeft className="h-5 w-5" /></span>
           <div className={`flex items-center gap-2 transition-all duration-200 ${autoHideToolbar ? 'pointer-events-none max-w-0 overflow-hidden opacity-0 group-hover:pointer-events-auto group-hover:max-w-[420px] group-hover:opacity-100' : 'max-w-[420px] opacity-100'}`}>
             <button onClick={() => setBellEnabled((enabled) => !enabled)} className="rounded-lg bg-white/10 p-2 text-white hover:bg-white/20" title={bellEnabled ? "Turn speaker chime off" : "Turn speaker chime on"} aria-label="Toggle speaker chime">
-              {bellEnabled ? <Speaker className="h-5 w-5" /> : <SpeakerX className="h-5 w-5" />}
+              {bellEnabled ? <Speaker className="h-5 w-5" /> : <VolumeX className="h-5 w-5" />}
             </button>
             <button onClick={handleVoiceButton} className="rounded-lg bg-white/10 p-2 text-white hover:bg-white/20" title={voiceEnabled ? "Disable voice announcements" : "Enable voice announcements"} aria-label="Toggle voice announcements">
               {voiceEnabled ? <Megaphone className="h-5 w-5" /> : <VolumeX className="h-5 w-5" />}
