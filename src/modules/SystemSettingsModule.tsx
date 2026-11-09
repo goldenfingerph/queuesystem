@@ -40,14 +40,15 @@ export function SystemSettingsModule() {
     const orgNameAr = (settings.org_name_ar ?? '').trim();
     const interval = Number(settings.ads_interval_sec ?? '15');
     const recentCalls = Number(settings.tv_recent_calls ?? '6');
-    if (!orgNameEn || orgNameEn.length > 120 || !orgNameAr || orgNameAr.length > 120) { setSavedMsg('Organization names are required and must be 120 characters or fewer.'); return; }
+    if (!orgNameEn || orgNameEn.length > 100 || !orgNameAr || orgNameAr.length > 100) { setSavedMsg('Organization names are required and must be 100 characters or fewer.'); return; }
     if (!Number.isInteger(interval) || interval < 5 || interval > 360) { setSavedMsg('Advertisement interval must be a whole number from 5 to 360 seconds.'); return; }
     if (!Number.isInteger(recentCalls) || recentCalls < 1 || recentCalls > 20) { setSavedMsg('TV recent calls count must be a whole number from 1 to 20.'); return; }
     setSaving(true);
     setSavedMsg('');
     try {
       await api.put('/settings', { settings });
-      setSavedMsg('Settings saved');
+      window.dispatchEvent(new Event('organization-settings-updated'));
+      setSavedMsg('Settings saved. Organization name updated across the app.');
       setTimeout(() => setSavedMsg(''), 3000);
     } catch (err) {
       setSavedMsg(err instanceof Error ? err.message : 'Save failed');
@@ -179,7 +180,7 @@ export function SystemSettingsModule() {
             <div className="space-y-4">
               <div>
                 <label className="mb-1 block text-xs font-medium text-navy-400">Organization Name (EN)</label>
-                <input className="input-field" required maxLength={120} value={settings.org_name_en ?? ''} onChange={(e) => setSettings({ ...settings, org_name_en: e.target.value })} />
+                <input className="input-field" required maxLength={100} value={settings.org_name_en ?? ''} onChange={(e) => setSettings({ ...settings, org_name_en: e.target.value })} />
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-navy-400">Organization Name (AR)</label>

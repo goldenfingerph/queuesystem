@@ -38,7 +38,14 @@ export function AppLayout({ active, children }: { active: ModuleId; children: Re
   const { user, logout } = useAuth();
   const [showPasswordForm, setShowPasswordForm] = useState(false);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
-  useEffect(() => { api.get<{ logoUrl: string | null }>('/logo').then((r) => setLogoUrl(r.logoUrl ? `${r.logoUrl}?v=${Date.now()}` : null)).catch(() => {}); }, []);
+  const [orgNameEn, setOrgNameEn] = useState('INFINITY SERVICES');
+  useEffect(() => {
+    api.get<{ logoUrl: string | null }>('/logo').then((r) => setLogoUrl(r.logoUrl ? r.logoUrl + '?v=' + Date.now() : null)).catch(() => {});
+    const loadOrganizationName = () => api.get<{ settings: Record<string, string> }>('/settings').then((r) => setOrgNameEn(r.settings.org_name_en?.trim() || 'INFINITY SERVICES')).catch(() => {});
+    loadOrganizationName();
+    window.addEventListener('organization-settings-updated', loadOrganizationName);
+    return () => window.removeEventListener('organization-settings-updated', loadOrganizationName);
+  }, []);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -62,7 +69,7 @@ export function AppLayout({ active, children }: { active: ModuleId; children: Re
             {logoUrl ? <img src={logoUrl} alt="Organization logo" className="h-full w-full rounded-lg object-contain p-0.5" /> : <ShieldCheck className="h-5 w-5" strokeWidth={2.4} />}
           </div>
           <div className="leading-tight">
-            <p className="text-sm font-bold">INFINITY</p>
+            <p className="max-w-40 truncate text-sm font-bold" title={orgNameEn}>{orgNameEn}</p>
             <p className="text-[10px] text-brand-200">Queue Management</p>
           </div>
         </div>

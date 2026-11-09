@@ -6,20 +6,23 @@ echo ================================================
 echo   INFINITY SERVICES - FIRST TIME INSTALL
 echo ================================================
 
-rem This project package uses the system-wide Node.js 22 installation.
-
-where node >nul 2>nul
-if errorlevel 1 (
-  echo Node.js 22 is missing. Install Node.js 22 LTS (64-bit) and try again.
-  start "" "https://nodejs.org/en/download"
+rem Use the self-contained Node.js 22 runtime shipped with QueueSystem.
+set "NODE_HOME=%~dp0runtime\node"
+if not exist "%NODE_HOME%\node.exe" (
+  echo Bundled Node.js runtime is missing. Re-download and reinstall the complete Windows package.
   pause
   exit /b 1
 )
+set "PATH=%NODE_HOME%;%PATH%"
 
 for /f %%V in ('node -p "Number(process.versions.node.split('.')[0])"') do set NODE_MAJOR=%%V
 if not "%NODE_MAJOR%"=="22" (
-  echo Node.js 22.x is required. Current major version: %NODE_MAJOR%
-  echo This application intentionally pins Node.js 22 for native SQLite compatibility.
+  echo Bundled Node.js 22.x is required. Current major version: %NODE_MAJOR%
+  pause
+  exit /b 1
+)
+if not exist "%NODE_HOME%\npm.cmd" (
+  echo Bundled npm is missing. Reinstall QueueSystem using the complete Setup Wizard.
   pause
   exit /b 1
 )
@@ -37,7 +40,7 @@ if exist "node_modules\tsx\dist\cli.mjs" (
 echo Bundled dependencies are missing or invalid.
 echo Installing the locked project dependencies...
 echo Internet is required only for this fallback installation.
-call npm ci
+call npm.cmd ci
 if errorlevel 1 (
   echo.
   echo Installation failed. Check the internet connection and try again.

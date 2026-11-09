@@ -3,14 +3,19 @@ setlocal
 cd /d "%~dp0"
 
 rem Prefer the Node.js 22 runtime bundled with this package.
-if exist "%~dp0runtime\node\node.exe" set "PATH=%~dp0runtime\node;%PATH%"
+if not exist "%~dp0runtime\node\node.exe" (
+  echo Bundled Node.js runtime is missing. Reinstall the complete QueueSystem package.
+  pause
+  exit /b 1
+)
+set "PATH=%~dp0runtime\node;%PATH%"
 
 echo ================================================
 echo   INFINITY SERVICES - DATABASE RESTORE
 echo ================================================
 where node >nul 2>nul
 if errorlevel 1 (
-  echo Node.js 22 is missing. Re-download the complete Windows package.
+  echo Bundled Node.js runtime is missing. Reinstall the complete Windows package.
   pause
   exit /b 1
 )
@@ -35,7 +40,7 @@ if "%BACKUP_NAME%"=="" (
 
 echo.
 echo Validating and restoring: %BACKUP_NAME%
-call npm run db:restore -- "%BACKUP_NAME%"
+call npm.cmd run db:restore -- "%BACKUP_NAME%"
 if errorlevel 1 (
   echo.
   echo Restore did not complete. Read the error above.

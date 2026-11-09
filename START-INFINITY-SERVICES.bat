@@ -6,17 +6,23 @@ echo ================================================
 echo   INFINITY SERVICES - LOCAL LAN SERVER
 echo ================================================
 
-rem This project package uses the system-wide Node.js 22 installation.
-
-where node >nul 2>nul
-if errorlevel 1 (
-  echo Node.js 22 is missing. Install Node.js 22 LTS (64-bit) and try again.
+rem Always prefer the Node.js 22 runtime bundled with this installation.
+set "NODE_HOME=%~dp0runtime\node"
+if not exist "%NODE_HOME%\node.exe" (
+  echo Bundled Node.js runtime is missing. Reinstall QueueSystem using the complete Setup Wizard.
   pause
   exit /b 1
 )
+set "PATH=%NODE_HOME%;%PATH%"
+
 for /f %%V in ('node -p "Number(process.versions.node.split('.')[0])"') do set NODE_MAJOR=%%V
 if not "%NODE_MAJOR%"=="22" (
-  echo Node.js 22.x is required. Current major version: %NODE_MAJOR%
+  echo Bundled Node.js 22.x is required. Current major version: %NODE_MAJOR%
+  pause
+  exit /b 1
+)
+if not exist "%NODE_HOME%\npm.cmd" (
+  echo Bundled npm is missing. Reinstall QueueSystem using the complete Setup Wizard.
   pause
   exit /b 1
 )
@@ -48,7 +54,7 @@ echo Starting the local server and building the app...
 echo Keep this window open while the queue system is in use.
 echo Press CTRL+C to stop the server safely.
 echo.
-call npm run start
+call npm.cmd run start
 echo.
 echo The server has stopped.
 pause

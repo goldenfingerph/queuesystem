@@ -10,9 +10,11 @@ export function LoginPage() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [orgNameEn, setOrgNameEn] = useState('INFINITY SERVICES');
 
   useEffect(() => {
-    api.get<{ logoUrl: string | null }>('/logo').then((r) => setLogoUrl(r.logoUrl ? `${r.logoUrl}?v=${Date.now()}` : null)).catch(() => {});
+    api.get<{ logoUrl: string | null }>('/logo').then((r) => setLogoUrl(r.logoUrl ? r.logoUrl + '?v=' + Date.now() : null)).catch(() => {});
+    api.get<{ settings: Record<string, string> }>('/settings').then((r) => setOrgNameEn(r.settings.org_name_en?.trim() || 'INFINITY SERVICES')).catch(() => {});
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -33,9 +35,9 @@ export function LoginPage() {
       <div className="w-full max-w-sm">
         <div className="mb-6 text-center">
           <div className="mx-auto mb-4 grid h-16 w-16 place-items-center rounded-2xl bg-gradient-to-br from-brand-500 to-accent-500 shadow-xl">
-            {logoUrl ? <img src={logoUrl} alt="Infinity Services logo" className="h-full w-full rounded-2xl object-contain p-1" /> : <ShieldCheck className="h-9 w-9 text-white" strokeWidth={2.2} />}
+            {logoUrl ? <img src={logoUrl} alt="Organization logo" className="h-full w-full rounded-2xl object-contain p-1" /> : <ShieldCheck className="h-9 w-9 text-white" strokeWidth={2.2} />}
           </div>
-          <h1 className="text-xl font-bold text-white">INFINITY SERVICES</h1>
+          <h1 className="text-xl font-bold text-white">{orgNameEn}</h1>
           <p className="text-sm text-brand-200">Queue Management System</p>
         </div>
         <form onSubmit={handleSubmit} className="surface p-6 space-y-4">
