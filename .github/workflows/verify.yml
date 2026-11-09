@@ -20,7 +20,7 @@ jobs:
     runs-on: windows-2022
     timeout-minutes: 30
     permissions:
-      contents: read
+      contents: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -177,6 +177,22 @@ jobs:
           $setup = Get-Item $setupPath
           Write-Host "Setup EXE size: $([math]::Round($setup.Length / 1MB, 1)) MB ($($setup.Length) bytes)"
           Get-FileHash -Path $setupPath -Algorithm SHA256 | Format-List Algorithm,Hash,Path
+
+      - name: Publish public Windows 11 release candidate assets
+        if: github.event_name == 'push' && github.ref == 'refs/heads/stable/windows11-release-candidate'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "windows11-rc-$($env:GITHUB_SHA.Substring(0,7))"
+          gh release create $tag `
+            "$env:RUNNER_TEMP\QueueSystem-Windows11-Project.zip" `
+            "$env:RUNNER_TEMP\QueueSystem-Setup.exe" `
+            --repo "$env:GITHUB_REPOSITORY" `
+            --target "$env:GITHUB_SHA" `
+            --title "QueueSystem Windows 11 Release Candidate" `
+            --notes "Windows 11 x64 setup and project ZIP. Requires Node.js 22 LTS x64. This is an unsigned release candidate; test on a non-production PC and keep existing databases/backups untouched." `
+            --prerelease
 
       - name: Stage final release files
         shell: pwsh
