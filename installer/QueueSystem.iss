@@ -39,7 +39,7 @@ Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs 
 [Icons]
 Name: "{autoprograms}\QueueSystem\Start QueueSystem Server"; Filename: "{app}\START-INFINITY-SERVICES.bat"; WorkingDir: "{app}"; IconFilename: "{sys}\imageres.dll"; IconIndex: 15
 Name: "{autoprograms}\QueueSystem\Install or Repair Dependencies"; Filename: "{app}\INSTALL-INFINITY-SERVICES.bat"; WorkingDir: "{app}"; IconFilename: "{sys}\imageres.dll"; IconIndex: 15
-Name: "{autodesktop}\Start QueueSystem Server"; Filename: "{sys}\cmd.exe"; Parameters: '/c ""{app}\START-INFINITY-SERVICES.bat""'; WorkingDir: "{app}"; Tasks: desktopicon; IconFilename: "{sys}\imageres.dll"; IconIndex: 15
+Name: "{autodesktop}\Start QueueSystem Server"; Filename: "{app}\START-INFINITY-SERVICES.bat"; WorkingDir: "{app}"; Tasks: desktopicon; IconFilename: "{sys}\imageres.dll"; IconIndex: 15
 
 [Code]
 function InitializeSetup(): Boolean;
