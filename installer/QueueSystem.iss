@@ -47,7 +47,7 @@ var
   ResultCode: Integer;
 begin
   Result := False;
-  if Exec(ExpandConstant('{sys}\cmd.exe'), '/C node --version | findstr /b /c:"v22." >nul', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+  if Exec('node.exe', '-e "process.exit(process.versions.node.startsWith(''22.'') ? 0 : 1)"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
     Result := (ResultCode = 0);
   if not Result then
     MsgBox('QueueSystem requires Node.js 22.x (64-bit) installed and available in PATH. Install Node.js 22 LTS, then run this setup again.', mbError, MB_OK);
