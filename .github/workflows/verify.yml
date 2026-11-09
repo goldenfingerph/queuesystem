@@ -76,23 +76,23 @@ jobs:
 
           # Bundle the exact Node.js 22 x64 runtime used to build and validate native modules.
           $nodeVersion = (node -p "process.versions.node").Trim()
-          if ($nodeVersion -notmatch '^22\\.') { throw "Expected Node.js 22.x, got $nodeVersion" }
+          if ($nodeVersion -notmatch '^22\.') { throw "Expected Node.js 22.x, got $nodeVersion" }
           $nodeArchiveName = "node-v$nodeVersion-win-x64.zip"
           $nodeBaseUrl = "https://nodejs.org/dist/v$nodeVersion"
           $nodeArchive = Join-Path $env:RUNNER_TEMP $nodeArchiveName
           $nodeSums = Join-Path $env:RUNNER_TEMP "SHASUMS256.txt"
           Invoke-WebRequest -Uri "$nodeBaseUrl/$nodeArchiveName" -OutFile $nodeArchive
           Invoke-WebRequest -Uri "$nodeBaseUrl/SHASUMS256.txt" -OutFile $nodeSums
-          $checksumMatch = Select-String -Path $nodeSums -Pattern ("^([0-9a-fA-F]{64})\\s+\\*?" + [regex]::Escape($nodeArchiveName) + "$") | Select-Object -First 1
+          $checksumMatch = Select-String -Path $nodeSums -Pattern ("^([0-9a-fA-F]{64})\s+\*?" + [regex]::Escape($nodeArchiveName) + "$") | Select-Object -First 1
           if (-not $checksumMatch) { throw "Official Node.js SHA-256 checksum not found for $nodeArchiveName" }
           $expectedHash = $checksumMatch.Matches[0].Groups[1].Value.ToUpperInvariant()
           $actualHash = (Get-FileHash -Path $nodeArchive -Algorithm SHA256).Hash
           if ($actualHash -ne $expectedHash) { throw "Node.js runtime archive SHA-256 verification failed." }
           $nodeExtract = Join-Path $env:RUNNER_TEMP "node-runtime-extract"
           Expand-Archive -Path $nodeArchive -DestinationPath $nodeExtract -Force
-          $nodeHome = Join-Path $packageDir "runtime\\node"
+          $nodeHome = Join-Path $packageDir "runtime\node"
           New-Item -ItemType Directory -Force -Path $nodeHome | Out-Null
-          Copy-Item -Path (Join-Path $nodeExtract "node-v$nodeVersion-win-x64\\*") -Destination $nodeHome -Recurse -Force
+          Copy-Item -Path (Join-Path $nodeExtract "node-v$nodeVersion-win-x64\*") -Destination $nodeHome -Recurse -Force
           if (-not (Test-Path (Join-Path $nodeHome "node.exe")) -or -not (Test-Path (Join-Path $nodeHome "npm.cmd"))) {
             throw "Bundled Node.js runtime is incomplete (node.exe/npm.cmd missing)."
           }
@@ -106,7 +106,9 @@ jobs:
             (Join-Path $packageDir "package-lock.json"),
             (Join-Path $packageDir "INSTALL-INFINITY-SERVICES.bat"),
             (Join-Path $packageDir "START-INFINITY-SERVICES.bat"),
-            (Join-Path $packageDir "RESTORE-INFINITY-BACKUP.bat")
+            (Join-Path $packageDir "RESTORE-INFINITY-BACKUP.bat"),
+            (Join-Path $packageDir "runtime\node\node.exe"),
+            (Join-Path $packageDir "runtime\node\npm.cmd")
           )
           foreach ($requiredPath in $requiredPaths) {
             if (-not (Test-Path $requiredPath)) { throw "Required package component missing: $requiredPath" }
@@ -148,7 +150,7 @@ jobs:
 
           REQUIREMENTS
           - Windows 10/11 64-bit.
-          - Node.js 22 x64 and npm are included in runtime\\node; no system-wide Node.js installation is required.
+          - Node.js 22 x64 and npm are included in runtime\node; no system-wide Node.js installation is required.
           - Internet is needed only if bundled dependencies fail validation and npm ci fallback is required.
 
           FIRST RUN
