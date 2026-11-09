@@ -3,7 +3,7 @@ run-name: Verify ${{ github.event_name }} on ${{ github.ref_name }}
 
 on:
   push:
-    branches: [main, restore-local-sqlite-lan, windows-batch-security-hardening]
+    branches: [main, restore-local-sqlite-lan, windows-batch-security-hardening, stable/windows11-release-candidate]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -154,16 +154,50 @@ jobs:
           '@
           Set-Content -Path (Join-Path $packageDir "WINDOWS-11-TEST-INSTRUCTIONS.txt") -Value $readme -Encoding UTF8
 
-          $zipPath = Join-Path $env:RUNNER_TEMP "QueueSystem-Windows11-Test.zip"
+          $zipPath = Join-Path $env:RUNNER_TEMP "QueueSystem-Windows11-Project.zip"
           Compress-Archive -Path (Join-Path $packageDir "*") -DestinationPath $zipPath -CompressionLevel Optimal
           $zip = Get-Item $zipPath
           Write-Host "Expanded package size: $expandedMB MB ($expandedBytes bytes)"
-          Write-Host "Download ZIP size: $([math]::Round($zip.Length / 1MB, 1)) MB ($($zip.Length) bytes)"
+          Write-Host "Project ZIP size: $([math]::Round($zip.Length / 1MB, 1)) MB ($($zip.Length) bytes)"
           Get-FileHash -Path $zipPath -Algorithm SHA256 | Format-List Algorithm,Hash,Path
-      - name: Upload Windows 11 test package
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup --no-progress -y
+
+      - name: Build Windows Setup Wizard
+        shell: pwsh
+        run: |
+          $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { throw "Inno Setup compiler not found: $iscc" }
+          $setupPath = Join-Path $env:RUNNER_TEMP "QueueSystem-Setup.exe"
+          & $iscc "/DAppVersion=1.0.0" "/DSourceDir=$packageDir" "/DOutputDir=$env:RUNNER_TEMP" "installer\QueueSystem.iss"
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup compilation failed with exit code $LASTEXITCODE" }
+          if (-not (Test-Path $setupPath)) { throw "Setup Wizard EXE was not created." }
+          $setup = Get-Item $setupPath
+          Write-Host "Setup EXE size: $([math]::Round($setup.Length / 1MB, 1)) MB ($($setup.Length) bytes)"
+          Get-FileHash -Path $setupPath -Algorithm SHA256 | Format-List Algorithm,Hash,Path
+
+      - name: Stage final release files
+        shell: pwsh
+        run: |
+          $releaseDir = Join-Path $env:RUNNER_TEMP "QueueSystem-Windows11-Release"
+          New-Item -ItemType Directory -Force -Path $releaseDir | Out-Null
+          Copy-Item (Join-Path $env:RUNNER_TEMP "QueueSystem-Windows11-Project.zip") $releaseDir
+          Copy-Item (Join-Path $env:RUNNER_TEMP "QueueSystem-Setup.exe") $releaseDir
+          @"
+          QueueSystem Windows 11 release candidate
+          Source commit: $env:GITHUB_SHA
+          Installer: QueueSystem-Setup.exe
+          Portable project bundle: QueueSystem-Windows11-Project.zip
+          Requires Windows 10/11 x64 and Node.js 22 LTS x64 already installed.
+          The installer does not include Node.js or Python.
+          "@ | Set-Content (Join-Path $releaseDir "README-FIRST.txt") -Encoding UTF8
+
+      - name: Upload Windows 11 release bundle
         uses: actions/upload-artifact@v4
         with:
-          name: QueueSystem-Windows11-Project
-          path: ${{ runner.temp }}/QueueSystem-Windows11-Test.zip
+          name: QueueSystem-Windows11-Release
+          path: ${{ runner.temp }}/QueueSystem-Windows11-Release/*
           if-no-files-found: error
           retention-days: 30
