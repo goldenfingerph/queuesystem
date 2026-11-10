@@ -46,7 +46,20 @@ export function SystemSettingsModule() {
     setSaving(true);
     setSavedMsg('');
     try {
-      await api.put('/settings', { settings });
+      // Submit only fields exposed by this form. The GET /settings response also
+      // contains legacy/internal keys (for example priority_order) that the
+      // settings PUT endpoint intentionally does not accept.
+      const editableSettings = {
+        org_name_en: orgNameEn,
+        org_name_ar: orgNameAr,
+        ads_interval_sec: String(interval),
+        tv_recent_calls: String(recentCalls),
+        language: settings.language ?? 'en',
+        voice_enabled: settings.voice_enabled === '1' ? '1' : '0',
+        bell_enabled: settings.bell_enabled === '1' ? '1' : '0',
+        ads_enabled: settings.ads_enabled === '1' ? '1' : '0',
+      };
+      await api.put('/settings', { settings: editableSettings });
       window.dispatchEvent(new Event('organization-settings-updated'));
       setSavedMsg('Settings saved. Organization name updated across the app.');
       setTimeout(() => setSavedMsg(''), 3000);
