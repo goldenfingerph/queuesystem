@@ -117,7 +117,7 @@ export function TvDisplayModule() {
     }
   };
 
-  // Voice announcement (English only)
+  // Bilingual voice announcement: English first, then Arabic.
   const announce = useCallback((ticket: CalledTicket) => {
     if (!voiceEnabled || !('speechSynthesis' in window)) return;
     if (lastSpokenRef.current.has(ticket.id)) return;
@@ -136,47 +136,62 @@ export function TvDisplayModule() {
         osc.stop(ctx.currentTime + 0.5);
       }
 
-      // Speak ticket digits individually (e.g. 4501 -> "four five zero one").
+      // Speak ticket digits individually in English for clear ticket identification.
       const digitWords = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'];
       const spokenTicketNumber = String(ticket.number)
         .split('')
         .map((character) => /[0-9]/.test(character) ? digitWords[Number(character)] : character)
         .join(', ');
-
-      // Spoken announcement
-      const utter = new SpeechSynthesisUtterance(
+      const english = new SpeechSynthesisUtterance(
         `Ticket number, ${spokenTicketNumber}. Please proceed to counter ${ticket.counter_number}.`
       );
-      utter.lang = 'en-US';
-      utter.rate = 0.88;
-      utter.pitch = 0.96;
-      utter.onstart = () => console.info('[TV] Voice announcement started:', ticket.number);
-      // Add a soft, delayed PA-style echo tail after the main announcement.
-      // Browser speechSynthesis cannot be routed through Web Audio for true reverb,
-      // so this quietly repeats the destination phrase once to create a subtle hall-like tail.
-      utter.onend = () => {
+      english.lang = 'en-US';
+      english.rate = 0.88;
+      english.pitch = 0.96;
+      english.onstart = () => console.info('[TV] English announcement started:', ticket.number);
+
+      // The Arabic utterance is queued only after English finishes, preventing overlap.
+      const arabic = new SpeechSynthesisUtterance(
+        `رقم التذكرة ${ticket.number}. يرجى التوجه إلى الشباك رقم ${ticket.counter_number}.`
+      );
+      arabic.lang = 'ar-SA';
+      arabic.rate = 0.88;
+      arabic.pitch = 1;
+      arabic.onstart = () => console.info('[TV] Arabic announcement started:', ticket.number);
+      arabic.onend = () => {
         if (!voiceEnabledRef.current) return;
         window.setTimeout(() => {
           if (!voiceEnabledRef.current || !('speechSynthesis' in window)) return;
           const echo = new SpeechSynthesisUtterance(
-            `Please proceed to counter ${ticket.counter_number}.`
+            `يرجى التوجه إلى الشباك رقم ${ticket.counter_number}.`
           );
-          echo.lang = 'en-US';
+          echo.lang = 'ar-SA';
           echo.rate = 0.96;
-          echo.pitch = 0.92;
+          echo.pitch = 0.96;
           echo.volume = 0.18;
           window.speechSynthesis.speak(echo);
         }, 260);
       };
-      utter.onerror = (event) => {
-        console.error('[TV] Voice announcement failed:', event.error);
+      english.onerror = (event) => {
+        console.error('[TV] English voice announcement failed:', event.error);
         lastSpokenRef.current.delete(ticket.id);
       };
+      arabic.onerror = (event) => {
+        console.error('[TV] Arabic voice announcement failed:', event.error);
+        // Keep the ticket marked as spoken: English already played, and avoid duplicate calls.
+      };
+      english.onend = () => {
+        if (!voiceEnabledRef.current || !('speechSynthesis' in window)) return;
+        window.speechSynthesis.speak(arabic);
+      };
+
       // Resume Chrome's speech engine and enqueue only after the browser is ready.
+      window.speechSynthesis.cancel();
       window.speechSynthesis.resume();
       window.setTimeout(() => {
+        if (!voiceEnabledRef.current) return;
         window.speechSynthesis.resume();
-        window.speechSynthesis.speak(utter);
+        window.speechSynthesis.speak(english);
         lastSpokenRef.current.add(ticket.id);
       }, 250);
     } catch { /* speech not available */ }
