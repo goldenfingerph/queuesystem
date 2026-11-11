@@ -12,7 +12,9 @@
     "server": "tsx server/index.ts",
     "start": "npm run build && npm run server",
     "db:restore": "tsx server/scripts/restore-backup.ts",
-    "test:backend": "tsx --test server/tests/backend.test.ts"
+    "test:backend": "tsx --test server/tests/backend.test.ts",
+    "prebuild": "node scripts/prepare-arabic-audio.mjs",
+    "predev": "node scripts/prepare-arabic-audio.mjs"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
