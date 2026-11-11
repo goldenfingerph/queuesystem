@@ -38,8 +38,8 @@ function Start-TvDisplay {
     Write-Log 'Chrome not found; using Edge kiosk fallback.'
   } else { Write-Log 'Opening TV Display in Google Chrome kiosk mode.' }
   New-Item -ItemType Directory -Path $profilePath -Force | Out-Null
-  $args=@('--kiosk','--no-first-run','--no-default-browser-check','--disable-session-crashed-bubble','--disable-infobars','--autoplay-policy=no-user-gesture-required',"--user-data-dir=$profilePath",$tvUrl)
-  Start-Process -FilePath $browser -ArgumentList $args | Out-Null
+  $chromeArguments=@('--kiosk','--no-first-run','--no-default-browser-check','--disable-session-crashed-bubble','--disable-infobars','--autoplay-policy=no-user-gesture-required','--user-data-dir="$profilePath"',$tvUrl)
+  Start-Process -FilePath $browser -ArgumentList $chromeArguments | Out-Null
 }
 Write-Log 'QueueSystem kiosk watchdog started after Windows sign-in.'
 while ($true) {
