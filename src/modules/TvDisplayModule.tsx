@@ -71,8 +71,16 @@ export function TvDisplayModule() {
     }
   }, [lastMessage]);
 
-  useEffect(() => () => {
-    if (audioContextRef.current && audioContextRef.current.state !== 'closed') void audioContextRef.current.close();
+  useEffect(() => {
+    if (typeof AudioContext === 'undefined') return;
+    const context = new AudioContext();
+    audioContextRef.current = context;
+    void context.resume().then(() => {
+      if (context.state === 'running') setAudioUnlocked(true);
+    }).catch((error) => console.info('[TV] Audio will unlock after the first user interaction:', error));
+    return () => {
+      if (context.state !== 'closed') void context.close();
+    };
   }, []);
 
   const handleVoiceButton = async () => {
