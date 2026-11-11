@@ -16,7 +16,7 @@ function Write-Log {
 }
 
 function Show-Message {
-    param([string]$Message, [string]$Title, [System.Windows.Forms.MessageBoxIcon]$Icon)
+    param([string]$Message, [string]$Title, $Icon)
     Add-Type -AssemblyName System.Windows.Forms
     [void][System.Windows.Forms.MessageBox]::Show($Message, $Title, [System.Windows.Forms.MessageBoxButtons]::OK, $Icon)
 }
