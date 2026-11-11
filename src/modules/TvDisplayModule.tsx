@@ -35,6 +35,10 @@ export function TvDisplayModule() {
   const [audioUnlocked, setAudioUnlocked] = useState(false);
   const { lastMessage } = useWebSocket();
   const lastSpokenRef = useRef<Set<number>>(new Set());
+  const announcementQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const activeArabicSourceRef = useRef<AudioBufferSourceNode | null>(null);
+  const arabicAudioBufferRef = useRef<AudioBuffer | null>(null);
+  const arabicAudioLoadingRef = useRef<Promise<AudioBuffer> | null>(null);
 
   // Load initial state
   useEffect(() => {
@@ -76,6 +80,10 @@ export function TvDisplayModule() {
     if (audioUnlocked && voiceEnabled) {
       voiceEnabledRef.current = false;
       if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+      if (activeArabicSourceRef.current) {
+        try { activeArabicSourceRef.current.stop(); } catch {}
+        activeArabicSourceRef.current = null;
+      }
       setVoiceEnabled(false);
       return;
     }
@@ -138,83 +146,138 @@ export function TvDisplayModule() {
         osc.stop(ctx.currentTime + 0.5);
       }
 
-      const englishDigits = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'];
-      const arabicDigits = ['صفر', 'واحد', 'اثنان', 'ثلاثة', 'أربعة', 'خمسة', 'ستة', 'سبعة', 'ثمانية', 'تسعة'];
-      const speakDigits = (value: string | number, words: string[]) => String(value)
-        .split('')
-        .map((character) => /[0-9]/.test(character) ? words[Number(character)] : character)
-        .join('، ');
-      const spokenTicketEn = speakDigits(ticket.number, englishDigits);
-      const spokenCounterEn = speakDigits(ticket.counter_number ?? '', englishDigits);
-      const spokenTicketAr = speakDigits(ticket.number, arabicDigits);
-      const spokenCounterAr = speakDigits(ticket.counter_number ?? '', arabicDigits);
+      const digitsOnly = (value: string | number | null | undefined) => String(value ?? '').match(/[0-9]/g) ?? [];
+      const spokenTicketEn = digitsOnly(ticket.number).map((digit) => ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'][Number(digit)]).join(', ');
+      const spokenCounterEn = digitsOnly(ticket.counter_number).map((digit) => ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'][Number(digit)]).join(', ');
 
-      const english = new SpeechSynthesisUtterance(
-        `Ticket number, ${spokenTicketEn}. Please proceed to counter ${spokenCounterEn}.`
-      );
-      english.lang = 'en-US';
-      english.rate = 0.88;
-      english.pitch = 0.96;
-
-      const arabic = new SpeechSynthesisUtterance(
-        `رقم التذكرة، ${spokenTicketAr}. يرجى التوجه إلى النافذة رقم، ${spokenCounterAr}.`
-      );
-      arabic.lang = 'ar-SA';
-      arabic.rate = 0.82;
-      arabic.pitch = 0.96;
-
-      english.onstart = () => console.info('[TV] English announcement started:', ticket.number);
-      english.onerror = (event) => {
-        console.error('[TV] English voice announcement failed:', event.error);
-        lastSpokenRef.current.delete(ticket.id);
+      const loadArabicAudio = (): Promise<AudioBuffer> => {
+        if (arabicAudioBufferRef.current) return Promise.resolve(arabicAudioBufferRef.current);
+        if (arabicAudioLoadingRef.current) return arabicAudioLoadingRef.current;
+        const context = audioContextRef.current;
+        if (!context) return Promise.reject(new Error('TV audio is not unlocked yet.'));
+        arabicAudioLoadingRef.current = fetch('/audio/arabic/announcements.ogg')
+          .then((response) => {
+            if (!response.ok) throw new Error(`Arabic audio file returned HTTP ${response.status}`);
+            return response.arrayBuffer();
+          })
+          .then((data) => context.decodeAudioData(data))
+          .then((buffer) => {
+            arabicAudioBufferRef.current = buffer;
+            return buffer;
+          })
+          .catch((error) => {
+            arabicAudioLoadingRef.current = null;
+            throw error;
+          });
+        return arabicAudioLoadingRef.current;
       };
-      english.onend = () => {
+
+      const playArabicClip = async (name: string): Promise<void> => {
         if (!voiceEnabledRef.current) return;
-        const synth = window.speechSynthesis;
-        const findArabicVoice = () => synth.getVoices().find((voice) => /^ar([-_]|$)/i.test(voice.lang))
-          || synth.getVoices().find((voice) => /arabic/i.test(voice.name));
-        const speakWithArabicVoice = (voice: SpeechSynthesisVoice) => {
-          if (!voiceEnabledRef.current) return;
-          arabic.voice = voice;
-          arabic.lang = voice.lang || 'ar-SA';
-          synth.speak(arabic);
+        const context = audioContextRef.current;
+        if (!context) throw new Error('TV audio is not unlocked.');
+        const buffer = await loadArabicAudio();
+        if (!voiceEnabledRef.current) return;
+        const clips: Record<string, { start: number; duration: number }> = {
+          '0': { start: 0.0, duration: 1.05796 },
+          '1': { start: 1.27796, duration: 1.05796 },
+          '2': { start: 2.55592, duration: 1.05796 },
+          '3': { start: 3.83387, duration: 1.05796 },
+          '4': { start: 5.11183, duration: 1.05796 },
+          '5': { start: 6.38979, duration: 1.05796 },
+          '6': { start: 7.66775, duration: 1.08196 },
+          '7': { start: 8.96971, duration: 1.05796 },
+          '8': { start: 10.24767, duration: 1.05796 },
+          '9': { start: 11.52562, duration: 1.05796 },
+          'ticket-number': { start: 12.80358, duration: 1.41796 },
+          'please-proceed': { start: 14.44154, duration: 3.12196 },
         };
-        const availableVoice = findArabicVoice();
-        if (availableVoice) {
-          speakWithArabicVoice(availableVoice);
-          return;
+        const clip = clips[name];
+        if (!clip) return;
+        await new Promise<void>((resolve) => {
+          const source = context.createBufferSource();
+          source.buffer = buffer;
+          source.connect(context.destination);
+          activeArabicSourceRef.current = source;
+          source.onended = () => {
+            if (activeArabicSourceRef.current === source) activeArabicSourceRef.current = null;
+            resolve();
+          };
+          try {
+            source.start(0, clip.start, Math.min(clip.duration, Math.max(0, buffer.duration - clip.start)));
+          } catch (error) {
+            console.error('[TV] Unable to play Arabic audio clip:', name, error);
+            if (activeArabicSourceRef.current === source) activeArabicSourceRef.current = null;
+            resolve();
+          }
+        });
+      };
+
+      const playArabicAnnouncement = async (): Promise<void> => {
+        await playArabicClip('ticket-number');
+        for (const digit of digitsOnly(ticket.number)) {
+          if (!voiceEnabledRef.current) return;
+          await playArabicClip(digit);
+        }
+        if (!voiceEnabledRef.current) return;
+        await playArabicClip('please-proceed');
+        for (const digit of digitsOnly(ticket.counter_number)) {
+          if (!voiceEnabledRef.current) return;
+          await playArabicClip(digit);
+        }
+      };
+
+      const queuedAnnouncement = announcementQueueRef.current.then(async () => {
+        if (!voiceEnabledRef.current) return;
+        const ctx = audioContextRef.current;
+        if (bellEnabled && ctx?.state === 'running') {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.frequency.value = 880;
+          gain.gain.setValueAtTime(0.3, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+          osc.start();
+          osc.stop(ctx.currentTime + 0.5);
         }
 
-        // Chromium can populate its speech voice list after the first call.
-        // Wait briefly for voiceschanged rather than silently using an English voice.
-        let finished = false;
-        const finish = (voice?: SpeechSynthesisVoice) => {
-          if (finished) return;
-          finished = true;
-          window.clearTimeout(voiceWaitTimer);
-          synth.removeEventListener('voiceschanged', onVoicesChanged);
-          if (voice && voiceEnabledRef.current) speakWithArabicVoice(voice);
-          else console.error('[TV] No Arabic speech voice is available. Install an Arabic text-to-speech voice in Windows.');
-        };
-        const onVoicesChanged = () => {
-          const voice = findArabicVoice();
-          if (voice) finish(voice);
-        };
-        const voiceWaitTimer = window.setTimeout(() => finish(findArabicVoice()), 2000);
-        synth.addEventListener('voiceschanged', onVoicesChanged);
-      };
-      arabic.onstart = () => console.info('[TV] Arabic announcement started:', ticket.number);
-      arabic.onerror = (event) => {
-        console.error('[TV] Arabic voice announcement failed:', event.error);
-        lastSpokenRef.current.delete(ticket.id);
-      };
+        const english = new SpeechSynthesisUtterance(
+          `Ticket number, ${spokenTicketEn}. Please proceed to counter ${spokenCounterEn}.`
+        );
+        english.lang = 'en-US';
+        english.rate = 0.88;
+        english.pitch = 0.96;
+        english.onstart = () => console.info('[TV] English announcement started:', ticket.number);
+        await new Promise<void>((resolve) => {
+          english.onend = () => {
+            console.info('[TV] English announcement finished:', ticket.number);
+            resolve();
+          };
+          english.onerror = (event) => {
+            console.error('[TV] English voice announcement failed:', event.error);
+            resolve();
+          };
+          if (!voiceEnabledRef.current) {
+            resolve();
+            return;
+          }
+          window.speechSynthesis.resume();
+          window.speechSynthesis.speak(english);
+        });
 
-      window.speechSynthesis.resume();
-      window.setTimeout(() => {
         if (!voiceEnabledRef.current) return;
-        window.speechSynthesis.resume();
-        window.speechSynthesis.speak(english);
-      }, 250);
+        try {
+          await playArabicAnnouncement();
+          console.info('[TV] Arabic MP3 announcement finished:', ticket.number);
+        } catch (error) {
+          console.error('[TV] Arabic MP3 announcement failed:', error);
+        }
+      });
+      announcementQueueRef.current = queuedAnnouncement.catch((error) => {
+        console.error('[TV] Announcement queue error:', error);
+      });
+
     } catch (error) {
       console.error('[TV] Unable to queue bilingual announcement:', error);
     }
