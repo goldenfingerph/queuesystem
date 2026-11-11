@@ -121,6 +121,9 @@ export function TvDisplayModule() {
   const announce = useCallback((ticket: CalledTicket) => {
     if (!voiceEnabled || !('speechSynthesis' in window)) return;
     if (lastSpokenRef.current.has(ticket.id)) return;
+    // Mark synchronously before scheduling speech so a rerender or repeated
+    // WebSocket effect cannot queue the same ticket twice.
+    lastSpokenRef.current.add(ticket.id);
     try {
       const ctx = audioContextRef.current;
       if (bellEnabled && ctx?.state === 'running') {
@@ -156,11 +159,7 @@ export function TvDisplayModule() {
       const arabic = new SpeechSynthesisUtterance(
         `رقم التذكرة، ${spokenTicketAr}. يرجى التوجه إلى النافذة رقم، ${spokenCounterAr}.`
       );
-      const voices = window.speechSynthesis.getVoices();
-      const arabicVoice = voices.find((voice) => /^ar([-_]|$)/i.test(voice.lang))
-        || voices.find((voice) => /arabic/i.test(voice.name));
-      arabic.lang = arabicVoice?.lang || 'ar-SA';
-      if (arabicVoice) arabic.voice = arabicVoice;
+      arabic.lang = 'ar-SA';
       arabic.rate = 0.82;
       arabic.pitch = 0.96;
 
@@ -171,7 +170,38 @@ export function TvDisplayModule() {
       };
       english.onend = () => {
         if (!voiceEnabledRef.current) return;
-        window.speechSynthesis.speak(arabic);
+        const synth = window.speechSynthesis;
+        const findArabicVoice = () => synth.getVoices().find((voice) => /^ar([-_]|$)/i.test(voice.lang))
+          || synth.getVoices().find((voice) => /arabic/i.test(voice.name));
+        const speakWithArabicVoice = (voice: SpeechSynthesisVoice) => {
+          if (!voiceEnabledRef.current) return;
+          arabic.voice = voice;
+          arabic.lang = voice.lang || 'ar-SA';
+          synth.speak(arabic);
+        };
+        const availableVoice = findArabicVoice();
+        if (availableVoice) {
+          speakWithArabicVoice(availableVoice);
+          return;
+        }
+
+        // Chromium can populate its speech voice list after the first call.
+        // Wait briefly for voiceschanged rather than silently using an English voice.
+        let finished = false;
+        const finish = (voice?: SpeechSynthesisVoice) => {
+          if (finished) return;
+          finished = true;
+          window.clearTimeout(voiceWaitTimer);
+          synth.removeEventListener('voiceschanged', onVoicesChanged);
+          if (voice && voiceEnabledRef.current) speakWithArabicVoice(voice);
+          else console.error('[TV] No Arabic speech voice is available. Install an Arabic text-to-speech voice in Windows.');
+        };
+        const onVoicesChanged = () => {
+          const voice = findArabicVoice();
+          if (voice) finish(voice);
+        };
+        const voiceWaitTimer = window.setTimeout(() => finish(findArabicVoice()), 2000);
+        synth.addEventListener('voiceschanged', onVoicesChanged);
       };
       arabic.onstart = () => console.info('[TV] Arabic announcement started:', ticket.number);
       arabic.onerror = (event) => {
@@ -184,7 +214,6 @@ export function TvDisplayModule() {
         if (!voiceEnabledRef.current) return;
         window.speechSynthesis.resume();
         window.speechSynthesis.speak(english);
-        lastSpokenRef.current.add(ticket.id);
       }, 250);
     } catch (error) {
       console.error('[TV] Unable to queue bilingual announcement:', error);
