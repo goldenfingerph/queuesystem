@@ -24,7 +24,7 @@ function Start-QueueServer {
 function Find-Chrome {
   $candidates=@(
     (Join-Path $env:ProgramFiles 'Google\Chrome\Application\chrome.exe'),
-    (Join-Path \${env:ProgramFiles(x86)} 'Google\Chrome\Application\chrome.exe'),
+    (Join-Path ${env:ProgramFiles(x86)} 'Google\Chrome\Application\chrome.exe'),
     (Join-Path $env:LOCALAPPDATA 'Google\Chrome\Application\chrome.exe')
   )
   return $candidates | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
@@ -33,12 +33,12 @@ function Start-TvDisplay {
   $browser=Find-Chrome
   if (-not $browser) {
     $browser=Join-Path $env:ProgramFiles 'Microsoft\Edge\Application\msedge.exe'
-    if (-not (Test-Path $browser)) { $browser=Join-Path \${env:ProgramFiles(x86)} 'Microsoft\Edge\Application\msedge.exe' }
+    if (-not (Test-Path $browser)) { $browser=Join-Path ${env:ProgramFiles(x86)} 'Microsoft\Edge\Application\msedge.exe' }
     if (-not (Test-Path $browser)) { Write-Log 'ERROR: Chrome and Edge were not found.'; return }
     Write-Log 'Chrome not found; using Edge kiosk fallback.'
   } else { Write-Log 'Opening TV Display in Google Chrome kiosk mode.' }
   New-Item -ItemType Directory -Path $profilePath -Force | Out-Null
-  $chromeArguments=@('--kiosk','--no-first-run','--no-default-browser-check','--disable-session-crashed-bubble','--disable-infobars','--autoplay-policy=no-user-gesture-required','--user-data-dir="$profilePath"',$tvUrl)
+  $chromeArguments=@('--kiosk','--no-first-run','--no-default-browser-check','--disable-session-crashed-bubble','--disable-infobars','--autoplay-policy=no-user-gesture-required',('--user-data-dir=' + '"' + $profilePath + '"'),$tvUrl)
   Start-Process -FilePath $browser -ArgumentList $chromeArguments | Out-Null
 }
 Write-Log 'QueueSystem kiosk watchdog started after Windows sign-in.'
