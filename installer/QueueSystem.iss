@@ -45,4 +45,4 @@ Name: "{autodesktop}\Start QueueSystem Server"; Filename: "{app}\START-INFINITY-
 [Run]
 ; Install the official Windows Arabic (Saudi Arabia) TTS capability after the app files are installed.
 ; This requests UAC elevation and uses Windows servicing/Windows Update; failure does not roll back QueueSystem.
-Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File \"{app}\\scripts\\Install-ArabicTTS.ps1\""; Verb: "runas"; Description: "Install Arabic text-to-speech voice (requires internet and Administrator approval)"; StatusMsg: "Installing Arabic speech voice from Windows..."; Flags: postinstall shellexec waituntilterminated
+Filename: "powershell.exe"; Parameters: '-NoProfile -ExecutionPolicy Bypass -File "{app}\scripts\Install-ArabicTTS.ps1"'; Verb: "runas"; Description: "Install Arabic text-to-speech voice (requires internet and Administrator approval)"; StatusMsg: "Installing Arabic speech voice from Windows..."; Flags: postinstall shellexec waituntilterminated
