@@ -57,6 +57,15 @@ jobs:
         run: npm run build
       - name: Run backend route and database regression tests
         run: npm run test:backend
+      - name: Validate Windows kiosk PowerShell syntax
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile("scripts/Start-QueueKiosk.ps1", [ref]$tokens, [ref]$errors) | Out-Null
+          if ($errors.Count -gt 0) { $errors | ForEach-Object { Write-Error $_.Message }; throw "Kiosk startup PowerShell syntax validation failed." }
+          Write-Host "Kiosk startup PowerShell syntax is valid."
+
       - name: Lint frontend and backend
         run: npm run lint
       - name: Package Windows 11 project bundle
@@ -106,6 +115,9 @@ jobs:
             (Join-Path $packageDir "package-lock.json"),
             (Join-Path $packageDir "INSTALL-INFINITY-SERVICES.bat"),
             (Join-Path $packageDir "START-INFINITY-SERVICES.bat"),
+            (Join-Path $packageDir "scripts\\Start-QueueKiosk.ps1"),
+            (Join-Path $packageDir "scripts\\Start-QueueKiosk.vbs"),
+            (Join-Path $packageDir "WINDOWS-AUTO-RECOVERY-GUIDE.md"),
             (Join-Path $packageDir "RESTORE-INFINITY-BACKUP.bat"),
             (Join-Path $packageDir "runtime\node\node.exe"),
             (Join-Path $packageDir "runtime\node\npm.cmd")
