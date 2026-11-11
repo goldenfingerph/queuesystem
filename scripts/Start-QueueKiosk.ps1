@@ -1,6 +1,10 @@
 $ErrorActionPreference = 'Stop'
 $installRoot = Split-Path -Parent $PSScriptRoot
-$serverUrl = 'http://127.0.0.1:4000'
+$certPath = Join-Path (Split-Path -Parent $PSScriptRoot) 'server\certs\server.crt'
+$keyPath = Join-Path (Split-Path -Parent $PSScriptRoot) 'server\certs\server.key'
+$useTls = (Test-Path $certPath) -and (Test-Path $keyPath)
+$serverScheme = if ($useTls) { 'https' } else { 'http' }
+$serverUrl = "$serverScheme://127.0.0.1:4000"
 $tvUrl = "$serverUrl/#/tv-display"
 $logDirectory = Join-Path $env:LOCALAPPDATA 'QueueSystem\Logs'
 $logPath = Join-Path $logDirectory 'Kiosk-AutoStart.log'
@@ -10,14 +14,24 @@ $tsxPath = Join-Path $installRoot 'node_modules\tsx\dist\cli.mjs'
 New-Item -ItemType Directory -Path $logDirectory -Force | Out-Null
 function Write-Log([string]$Message) { Add-Content -LiteralPath $logPath -Value ('{0} {1}' -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'),$Message) -Encoding UTF8 }
 function Test-QueueServer {
-  try { $r=Invoke-WebRequest -Uri "$serverUrl/health" -UseBasicParsing -TimeoutSec 3; return $r.StatusCode -ge 200 -and $r.StatusCode -lt 500 } catch { return $false }
+  try {
+    if ($useTls) {
+      $request = [System.Net.HttpWebRequest]::Create("$serverUrl/health")
+      $request.Timeout = 3000
+      $request.ServerCertificateValidationCallback = { return $true }
+      $response = $request.GetResponse()
+      $response.Close()
+      return $true
+    }
+    $r = Invoke-WebRequest -Uri "$serverUrl/health" -UseBasicParsing -TimeoutSec 3
+    return $r.StatusCode -ge 200 -and $r.StatusCode -lt 500
+  } catch { return $false }
 }
 function Start-QueueServer {
   if (-not (Test-Path $nodePath) -or -not (Test-Path $tsxPath)) { Write-Log 'ERROR: Bundled Node.js runtime or tsx entry is missing.'; return }
   $stdout=Join-Path $logDirectory 'Server-stdout.log'; $stderr=Join-Path $logDirectory 'Server-stderr.log'
   $env:PATH="$(Split-Path -Parent $nodePath);$env:PATH"
-  $cert=Join-Path $installRoot 'server\certs\server.crt'; $key=Join-Path $installRoot 'server\certs\server.key'
-  if ((Test-Path $cert) -and (Test-Path $key)) { $env:TLS_CERT_FILE=$cert; $env:TLS_KEY_FILE=$key } else { Remove-Item Env:TLS_CERT_FILE,Env:TLS_KEY_FILE -ErrorAction SilentlyContinue }
+  if ($useTls) { $env:TLS_CERT_FILE=$certPath; $env:TLS_KEY_FILE=$keyPath } else { Remove-Item Env:TLS_CERT_FILE,Env:TLS_KEY_FILE -ErrorAction SilentlyContinue }
   Write-Log 'Starting QueueSystem server process.'
   Start-Process -FilePath $nodePath -ArgumentList @($tsxPath,'server/index.ts') -WorkingDirectory $installRoot -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr | Out-Null
 }
