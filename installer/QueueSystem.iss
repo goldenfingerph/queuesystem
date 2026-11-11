@@ -39,10 +39,9 @@ Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs 
 [Icons]
 Name: "{autoprograms}\QueueSystem\Start QueueSystem Server"; Filename: "{app}\START-INFINITY-SERVICES.bat"; WorkingDir: "{app}"; IconFilename: "{sys}\imageres.dll"; IconIndex: 15
 Name: "{autoprograms}\QueueSystem\Install or Repair Dependencies"; Filename: "{app}\INSTALL-INFINITY-SERVICES.bat"; WorkingDir: "{app}"; IconFilename: "{sys}\imageres.dll"; IconIndex: 15
-Name: "{userstartup}\QueueSystem Auto Start"; Filename: "{app}\START-INFINITY-SERVICES.bat"; WorkingDir: "{app}"; IconFilename: "{sys}\imageres.dll"; IconIndex: 15
+Name: "{userstartup}\QueueSystem Auto Start"; Filename: "{sys}\wscript.exe"; Parameters: """{app}\scripts\Start-QueueKiosk.vbs"""; WorkingDir: "{app}\scripts"; IconFilename: "{sys}\imageres.dll"; IconIndex: 15
 Name: "{autodesktop}\Start QueueSystem Server"; Filename: "{app}\START-INFINITY-SERVICES.bat"; WorkingDir: "{app}"; Tasks: desktopicon; IconFilename: "{sys}\imageres.dll"; IconIndex: 15
 
+
 [Run]
-; Install the official Windows Arabic (Saudi Arabia) TTS capability after the app files are installed.
-; This requests UAC elevation and uses Windows servicing/Windows Update; failure does not roll back QueueSystem.
-Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\scripts\Install-ArabicTTS.ps1"""; Verb: "runas"; Description: "Install Arabic text-to-speech voice (requires internet and Administrator approval)"; StatusMsg: "Installing Arabic speech voice from Windows..."; Flags: postinstall shellexec waituntilterminated
+Filename: "{app}\\START-QUEUE-KIOSK.bat"; Description: "Start QueueSystem server and TV Display now"; Flags: postinstall nowait skipifsilent
