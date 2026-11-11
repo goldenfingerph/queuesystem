@@ -71,7 +71,15 @@ while ($true) {
       $process = Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue
       $process -and $process.MainWindowHandle -ne 0
     } | Select-Object -First 1
-    if (-not $kioskWindow) { Start-TvDisplay }
+    if (-not $kioskWindow) {
+      Write-Log 'Server is healthy. Waiting 5 seconds before opening the TV Display browser.'
+      Start-Sleep -Seconds 5
+      if (-not (Test-QueueServer)) {
+        Write-Log 'Server health check failed during browser launch delay; TV Display will wait.'
+        continue
+      }
+      Start-TvDisplay
+    }
   } catch { Write-Log "Watchdog error: $($_.Exception.Message)" }
   Start-Sleep -Seconds 15
 }
