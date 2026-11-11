@@ -43,5 +43,3 @@ Name: "{userstartup}\QueueSystem Auto Start"; Filename: "{sys}\wscript.exe"; Par
 Name: "{autodesktop}\Start QueueSystem Server"; Filename: "{app}\START-INFINITY-SERVICES.bat"; WorkingDir: "{app}"; Tasks: desktopicon; IconFilename: "{sys}\imageres.dll"; IconIndex: 15
 
 
-[Run]
-Filename: "{app}\\START-QUEUE-KIOSK.bat"; Description: "Start QueueSystem server and TV Display now"; Flags: postinstall nowait skipifsilent
