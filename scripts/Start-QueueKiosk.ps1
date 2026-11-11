@@ -65,8 +65,13 @@ while ($true) {
       if (-not (Test-QueueServer)) { Write-Log 'WARNING: Server not healthy after 90 seconds; retrying.'; Start-Sleep -Seconds 15; continue }
       Write-Log 'Queue server health check passed.'
     }
-    $kiosk=Get-CimInstance Win32_Process -Filter "Name='chrome.exe' OR Name='msedge.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -and $_.CommandLine.Contains($profilePath) } | Select-Object -First 1
-    if (-not $kiosk) { Start-TvDisplay }
+    $kioskProcesses = Get-CimInstance Win32_Process -Filter "Name='chrome.exe' OR Name='msedge.exe'" -ErrorAction SilentlyContinue |
+      Where-Object { $_.CommandLine -and $_.CommandLine.Contains($profilePath) }
+    $kioskWindow = $kioskProcesses | Where-Object {
+      $process = Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue
+      $process -and $process.MainWindowHandle -ne 0
+    } | Select-Object -First 1
+    if (-not $kioskWindow) { Start-TvDisplay }
   } catch { Write-Log "Watchdog error: $($_.Exception.Message)" }
   Start-Sleep -Seconds 15
 }
