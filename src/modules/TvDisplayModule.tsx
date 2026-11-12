@@ -122,73 +122,53 @@ export function TvDisplayModule() {
     }
   };
 
-  // English speech first, followed by Fatima's recorded Arabic MP3 clips
-  // (combined into a small OGG/Opus sprite for reliable offline packaging).
-  const loadArabicAudioBuffer = useCallback(async (context: AudioContext) => {
-    if (arabicAudioBufferRef.current) return arabicAudioBufferRef.current;
-    if (!arabicAudioBufferPromiseRef.current) {
-      arabicAudioBufferPromiseRef.current = (async () => {
-        const partNames = [
-          '/audio/arabic-sprite-01.txt',
-          '/audio/arabic-sprite-02.txt',
-          '/audio/arabic-sprite-03.txt',
-          '/audio/arabic-sprite-04.txt',
-        ];
-        const parts = await Promise.all(partNames.map(async (path) => {
-          const response = await fetch(path, { cache: 'force-cache' });
-          if (!response.ok) throw new Error(`Unable to load Arabic audio asset: ${path} (${response.status})`);
-          return response.text();
-        }));
-        const encoded = parts.join('').replace(/\\s/g, '');
-        const binary = window.atob(encoded);
-        const bytes = new Uint8Array(binary.length);
-        for (let index = 0; index < binary.length; index++) bytes[index] = binary.charCodeAt(index);
-        const decoded = await context.decodeAudioData(bytes.buffer);
-        arabicAudioBufferRef.current = decoded;
+  // Load Fatima's original MP3 recordings individually and cache decoded clips.
+  const arabicAudioBuffersRef = useRef<Map<string, AudioBuffer>>(new Map());
+  const arabicAudioPromisesRef = useRef<Map<string, Promise<AudioBuffer>>>(new Map());
+
+  const loadArabicAudioClip = useCallback(async (context: AudioContext, name: string) => {
+    const cached = arabicAudioBuffersRef.current.get(name);
+    if (cached) return cached;
+    let pending = arabicAudioPromisesRef.current.get(name);
+    if (!pending) {
+      pending = (async () => {
+        const path = `/audio/fatima/${name}.mp3`;
+        const response = await fetch(path, { cache: 'force-cache' });
+        if (!response.ok) throw new Error(`Unable to load Fatima audio clip: ${path} (${response.status})`);
+        const decoded = await context.decodeAudioData(await response.arrayBuffer());
+        arabicAudioBuffersRef.current.set(name, decoded);
         return decoded;
       })().catch((error) => {
-        arabicAudioBufferPromiseRef.current = null;
+        arabicAudioPromisesRef.current.delete(name);
         throw error;
       });
+      arabicAudioPromisesRef.current.set(name, pending);
     }
-    return arabicAudioBufferPromiseRef.current;
+    return pending;
   }, []);
 
   const playArabicRecordingSequence = useCallback(async (ticket: CalledTicket, context: AudioContext) => {
-    const clips: Record<string, { offset: number; duration: number }> = {
-      '0': { offset: 0.000, duration: 1.058 },
-      '1': { offset: 1.278, duration: 1.058 },
-      '2': { offset: 2.556, duration: 1.058 },
-      '3': { offset: 3.834, duration: 1.058 },
-      '4': { offset: 5.112, duration: 1.058 },
-      '5': { offset: 6.390, duration: 1.058 },
-      '6': { offset: 7.668, duration: 1.082 },
-      '7': { offset: 8.970, duration: 1.058 },
-      '8': { offset: 10.248, duration: 1.058 },
-      '9': { offset: 11.526, duration: 1.058 },
-      'ticket-number': { offset: 12.804, duration: 1.418 },
-      'please-proceed': { offset: 14.442, duration: 3.122 },
+    const playClip = async (name: string) => {
+      if (!voiceEnabledRef.current) return;
+      const buffer = await loadArabicAudioClip(context, name);
+      if (!voiceEnabledRef.current) return;
+      await new Promise<void>((resolve, reject) => {
+        const source = context.createBufferSource();
+        source.buffer = buffer;
+        source.connect(context.destination);
+        arabicSourceRef.current = source;
+        source.onended = () => {
+          if (arabicSourceRef.current === source) arabicSourceRef.current = null;
+          resolve();
+        };
+        try {
+          source.start();
+        } catch (error) {
+          arabicSourceRef.current = null;
+          reject(error);
+        }
+      });
     };
-    const buffer = await loadArabicAudioBuffer(context);
-    if (!voiceEnabledRef.current) return;
-    const playClip = (name: string) => new Promise<void>((resolve, reject) => {
-      const clip = clips[name];
-      if (!clip) { resolve(); return; }
-      const source = context.createBufferSource();
-      source.buffer = buffer;
-      source.connect(context.destination);
-      arabicSourceRef.current = source;
-      source.onended = () => {
-        if (arabicSourceRef.current === source) arabicSourceRef.current = null;
-        resolve();
-      };
-      try {
-        source.start(0, clip.offset, clip.duration);
-      } catch (error) {
-        arabicSourceRef.current = null;
-        reject(error);
-      }
-    });
     const playDigits = async (value: string | number | null | undefined) => {
       for (const digit of String(value ?? '').match(/[0-9]/g) ?? []) {
         if (!voiceEnabledRef.current) return;
@@ -200,8 +180,8 @@ export function TvDisplayModule() {
     await playDigits(ticket.number);
     await playClip('please-proceed');
     await playDigits(ticket.counter_number);
-    console.info('[TV] Recorded Arabic announcement completed:', ticket.number);
-  }, [loadArabicAudioBuffer]);
+    console.info('[TV] Fatima recorded Arabic announcement completed:', ticket.number);
+  }, [loadArabicAudioClip]);
 
   // Bilingual announcement: generated English voice, then recorded Arabic clips.
   const announce = useCallback((ticket: CalledTicket) => {
