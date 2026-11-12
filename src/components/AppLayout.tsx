@@ -107,7 +107,7 @@ export function AppLayout({ active, children }: { active: ModuleId; children: Re
               {item.label}
             </a>
           ))}
-          {role !== 'receptionist' && role !== 'service_officer' && (
+          {role !== 'service_officer' && (
             <a href="#/tv-display" className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-navy-200 hover:bg-white/10 transition-colors">
               <Tv className="h-4.5 w-4.5" strokeWidth={2} />
               Open TV Display
