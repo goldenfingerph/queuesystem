@@ -134,6 +134,16 @@ export function AppLayout({ active, children }: { active: ModuleId; children: Re
       <main className="min-w-0 flex-1 overflow-y-auto">
         {children}
       </main>
+      {role === 'receptionist' && (
+        <div className="fixed right-5 top-4 z-40 flex items-center gap-3 rounded-xl border border-slate-200 bg-white/95 px-4 py-2 shadow-md backdrop-blur">
+          <span className="max-w-48 truncate text-sm font-semibold text-navy-900" title={user?.display_name}>{user?.display_name}</span>
+          <span className="h-5 w-px bg-slate-200" />
+          <button type="button" onClick={logout} className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-medium text-navy-700 transition-colors hover:bg-slate-100 hover:text-error-600" aria-label="Log out">
+            <LogOut className="h-4 w-4" />
+            <span>Logout</span>
+          </button>
+        </div>
+      )}
       {role === 'admin' && (
         <div className="fixed right-5 top-5 z-40">
           <button type="button" onClick={() => setShowColorPalette((open) => !open)} className="flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 bg-white text-navy-700 shadow-lg hover:bg-slate-50" title="Change system colors" aria-label="Change system colors"><Palette className="h-5 w-5" /></button>
