@@ -120,81 +120,98 @@ export function ReceptionModule() {
 
   return (
     <AppLayout active="reception">
-      <div className="p-6">
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-navy-900">Reception &amp; Ticket Generation <span className="text-lg" dir="rtl">الاستقبال وإصدار التذاكر</span></h1>
-          <p className="text-sm text-navy-500">Select a service and visitor category to generate a ticket · اختر الخدمة وفئة الزائر لإصدار تذكرة</p>
-        </div>
-
-        <div className="grid gap-6 lg:grid-cols-2">
-          {/* Selection */}
-          <div className="surface p-6">
-            <h2 className="mb-4 text-sm font-bold uppercase tracking-wide text-navy-500">New Ticket · تذكرة جديدة</h2>
-            {error && <div className="mb-3 flex items-center gap-2 rounded-lg bg-error-500/10 px-3 py-2 text-sm text-error-600"><AlertCircle className="h-4 w-4" />{error}</div>}
-            <div className="space-y-4">
-              <div>
-                <label className="mb-2 block text-xs font-semibold uppercase text-navy-400">Service · الخدمة</label>
-                <div className="grid grid-cols-2 gap-2">
-                  {services.map((s) => (
-                    <button key={s.id} onClick={() => setSelectedService(s.id)}
-                      className={`rounded-lg border p-3 text-left transition-all ${selectedService === s.id ? 'border-brand-600 bg-brand-100 ring-2 ring-brand-300 shadow-sm' : 'border-slate-200 hover:border-brand-400 hover:bg-brand-50'}`}>
-                      <p className="font-bold text-navy-900">{s.name}</p><p className="text-sm text-navy-600" dir="rtl" lang="ar">{s.name_ar}</p>
-                      <p className="text-xs text-navy-400">Tickets {s.ticket_range_start}–{s.ticket_range_end}</p>
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <label className="mb-2 block text-xs font-semibold uppercase text-navy-400">Visitor Category · فئة الزائر</label>
-                <div className="grid grid-cols-2 gap-2">
-                  {categories.map((c) => (
-                    <button key={c.id} onClick={() => setSelectedCategory(c.id)}
-                      className={`rounded-lg border p-3 text-left transition-all ${selectedCategory === c.id ? 'border-brand-500 bg-brand-50 ring-2 ring-brand-100' : 'border-slate-200 hover:border-brand-300'}`}>
-                      <p className="font-medium text-navy-900">{c.label_en}</p>
-                      <p className="text-xs text-navy-400" dir="rtl">{c.label_ar}</p>
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <button onClick={generate} disabled={busy || !selectedService} className="btn-primary w-full focus-ring">
-                <Ticket className="h-4 w-4" /> {busy ? 'Generating... · جارٍ الإصدار' : 'Generate Ticket · إصدار تذكرة'}
-              </button>
+      <div className="reception-page">
+        <div className="reception-shell">
+          <header className="reception-hero">
+            <div className="reception-hero-glow" />
+            <div className="reception-hero-content">
+              <div className="reception-eyebrow"><span className="reception-live-dot" /> RECEPTION DESK <span className="reception-eyebrow-divider">/</span> الاستقبال</div>
+              <h1>Welcome <span>to Reception</span></h1>
+              <p>Fast, simple ticketing for every visitor. <span dir="rtl" lang="ar">خدمة سريعة وسهلة لجميع الزوار</span></p>
             </div>
-          </div>
+            <div className="reception-hero-mark"><Ticket className="h-10 w-10" strokeWidth={1.5} /><span>QUEUE<br />MANAGEMENT</span></div>
+            <div className="reception-hero-bottom"><span>{orgNameEn}</span><span>VISITOR SERVICES · خدمات الزوار</span></div>
+          </header>
 
-          {/* Last ticket + print */}
-          <div className="surface p-6">
-            <h2 className="mb-4 text-sm font-bold uppercase tracking-wide text-navy-500">Last Generated Ticket · آخر تذكرة صادرة</h2>
-            {lastTicket ? (
-              <div>
-                <div className="rounded-2xl border-2 border-brand-400 bg-gradient-to-br from-brand-100 via-brand-50 to-white p-8 text-center shadow-sm">
-                  <p className="text-xs font-bold uppercase tracking-widest text-brand-800">Your Number · رقمك</p>
-                  <p className="my-3 text-5xl font-bold text-navy-950 tracking-wider">{lastTicket.number}</p>
-                  <div className="flex items-center justify-center gap-2 text-brand-800">
-                    <CheckCircle className="h-4 w-4" />
-                    <span className="text-sm">Ticket created successfully · تم إصدار التذكرة بنجاح</span>
-                  </div>
+          <div className="reception-workspace">
+            <section className="reception-panel reception-selection">
+              <div className="reception-section-heading">
+                <div className="reception-heading-icon"><Ticket className="h-5 w-5" /></div>
+                <div><h2>Generate a ticket</h2><p>Choose a service and visitor type · اختر الخدمة ونوع الزائر</p></div>
+                <span className="reception-step">01</span>
+              </div>
+              {error && <div className="mb-5 flex items-center gap-2 rounded-xl bg-error-500/10 px-4 py-3 text-sm text-error-600"><AlertCircle className="h-4 w-4 shrink-0" />{error}</div>}
+
+              <div className="reception-field">
+                <div className="reception-field-label"><span>SELECT A SERVICE</span><span dir="rtl">اختر الخدمة</span></div>
+                <div className="reception-service-grid">
+                  {services.map((s) => (
+                    <button key={s.id} onClick={() => setSelectedService(s.id)} className={selectedService === s.id ? "reception-choice is-selected" : "reception-choice"}>
+                      <span className="reception-choice-check">{selectedService === s.id ? "✓" : ""}</span>
+                      <span className="reception-choice-name">{s.name}</span>
+                      <span className="reception-choice-ar" dir="rtl" lang="ar">{s.name_ar}</span>
+                      <span className="reception-choice-range">TICKETS {s.ticket_range_start}–{s.ticket_range_end}</span>
+                    </button>
+                  ))}
+                  {services.length === 0 && <div className="reception-empty-services">No active services available · لا توجد خدمات متاحة حالياً</div>}
                 </div>
-                <div className="mt-4 space-y-3">
-                  <div>
-                    <label className="mb-1 block text-xs font-semibold uppercase text-navy-400">Printer Size · حجم الطابعة</label>
+              </div>
+
+              <div className="reception-field">
+                <div className="reception-field-label"><span>VISITOR CATEGORY</span><span dir="rtl">فئة الزائر</span></div>
+                <div className="reception-category-grid">
+                  {categories.map((c) => (
+                    <button key={c.id} onClick={() => setSelectedCategory(c.id)} className={selectedCategory === c.id ? "reception-category is-selected" : "reception-category"}>
+                      <span className="reception-category-indicator" />
+                      <span><strong>{c.label_en}</strong><small dir="rtl" lang="ar">{c.label_ar}</small></span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <button onClick={generate} disabled={busy || !selectedService} className="reception-generate">
+                <Ticket className="h-5 w-5" />
+                <span>{busy ? 'Generating ticket… · جارٍ إصدار التذكرة' : 'Generate Ticket · إصدار تذكرة'}</span>
+                <span className="reception-generate-arrow">→</span>
+              </button>
+              <p className="reception-secure-note">Please verify the selected service before issuing a ticket.</p>
+            </section>
+
+            <section className="reception-panel reception-ticket-panel">
+              <div className="reception-section-heading">
+                <div className="reception-heading-icon reception-heading-icon-soft"><Printer className="h-5 w-5" /></div>
+                <div><h2>Ticket preview</h2><p>Your latest issued ticket · آخر تذكرة صادرة</p></div>
+                <span className="reception-step">02</span>
+              </div>
+              {lastTicket ? (
+                <div className="reception-ticket-result">
+                  <div className="reception-ticket-topline"><span>YOUR QUEUE NUMBER</span><CheckCircle className="h-5 w-5" /></div>
+                  <div className="reception-ticket-number">{lastTicket.number}</div>
+                  <div className="reception-ticket-success">Ticket issued successfully <span dir="rtl">· تم إصدار التذكرة بنجاح</span></div>
+                  <div className="reception-ticket-service"><span>SERVICE</span><strong>{lastTicket.serviceName}</strong><small dir="rtl" lang="ar">{lastTicket.serviceNameAr}</small></div>
+                  <div className="reception-ticket-category"><span>{lastTicket.categoryEn}</span><span dir="rtl" lang="ar">{lastTicket.categoryAr}</span></div>
+                  <div className="reception-print-options">
+                    <label>PRINTER PAPER SIZE</label>
                     <div className="flex gap-2">
-                      <button onClick={() => setPrintSize('58')} className={`btn ${printSize === '58' ? 'bg-brand-600 text-white shadow-sm' : 'bg-brand-50 text-brand-800 hover:bg-brand-100'}`}>58 × 100mm</button>
-                      <button onClick={() => setPrintSize('80')} className={`btn ${printSize === '80' ? 'bg-brand-600 text-white shadow-sm' : 'bg-brand-50 text-brand-800 hover:bg-brand-100'}`}>80 × 100mm</button>
+                      <button onClick={() => setPrintSize('58')} className={printSize === '58' ? "reception-size is-selected" : "reception-size"}>58 mm</button>
+                      <button onClick={() => setPrintSize('80')} className={printSize === '80' ? "reception-size is-selected" : "reception-size"}>80 mm</button>
                     </div>
+                    <button onClick={printTicket} className="reception-print-button"><Printer className="h-4 w-4" /> Print Ticket · طباعة التذكرة</button>
                   </div>
-                  <button onClick={printTicket} className="btn-primary w-full">
-                    <Printer className="h-4 w-4" /> Print Ticket
-                  </button>
                 </div>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center py-16 text-navy-300">
-                <Ticket className="mb-3 h-12 w-12" />
-                <p className="text-sm">No ticket generated yet · لم تصدر أي تذكرة بعد</p>
-              </div>
-            )}
+              ) : (
+                <div className="reception-ticket-empty">
+                  <div className="reception-ticket-empty-icon"><Ticket className="h-9 w-9" /></div>
+                  <strong>Your ticket will appear here</strong>
+                  <span>سيظهر رقم تذكرتك هنا</span>
+                  <p>Select a service, choose a visitor category, then generate a ticket.</p>
+                  <div className="reception-ticket-empty-line"><i /><i /><i /></div>
+                </div>
+              )}
+              <div className="reception-help-strip"><span className="reception-help-dot" /><span>Need assistance? Please contact your system administrator.</span></div>
+            </section>
           </div>
+          <footer className="reception-footer"><span>POWERED BY INFINITY SERVICES</span><span>QUEUE MANAGEMENT SYSTEM</span></footer>
         </div>
       </div>
     </AppLayout>
