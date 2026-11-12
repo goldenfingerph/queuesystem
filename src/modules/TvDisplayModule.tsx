@@ -36,7 +36,7 @@ export function TvDisplayModule() {
   const { lastMessage } = useWebSocket();
   const lastSpokenRef = useRef<Set<number>>(new Set());
   const arabicAudioBuffersRef = useRef<Map<string, AudioBuffer>>(new Map());
-  const arabicAudioPromisesRef = useRef<Map<string, Promise<AudioBuffer>>(new Map());
+  const arabicAudioPromisesRef = useRef<Map<string, Promise<AudioBuffer>>>(new Map());
   const arabicSourceRef = useRef<AudioBufferSourceNode | null>(null);
 
   // Load initial state
