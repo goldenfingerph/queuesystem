@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import {
   LayoutDashboard, ConciergeBell, MonitorCheck, Users, SlidersHorizontal,
-  Ticket, Headset, Tv, BarChart3, Settings, ShieldCheck, LogOut, KeyRound, X,
+  Ticket, Headset, Tv, BarChart3, Settings, ShieldCheck, LogOut, KeyRound, X, Palette,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { ROLE_PERMISSIONS, type ModuleId, type StaffRole } from '@/types/domain';
@@ -37,6 +37,25 @@ const MODULE_LABEL: Record<ModuleId, string> = {
 export function AppLayout({ active, children }: { active: ModuleId; children: ReactNode }) {
   const { user, logout } = useAuth();
   const [showPasswordForm, setShowPasswordForm] = useState(false);
+  const [showColorPalette, setShowColorPalette] = useState(false);
+  const [themeColor, setThemeColor] = useState('green');
+  const colorThemes = [
+    { id: 'blue', label: 'Blue', shades: ['#eff6ff','#dbeafe','#bfdbfe','#93c5fd','#60a5fa','#3b82f6','#2563eb','#1d4ed8','#1e40af'] },
+    { id: 'green', label: 'Green', shades: ['#f7faed','#edf4d7','#dce9b2','#c5dc7e','#afd052','#9cc53b','#7f9f2e','#637d25','#46591b'] },
+    { id: 'purple', label: 'Purple', shades: ['#faf5ff','#f3e8ff','#e9d5ff','#d8b4fe','#c084fc','#a855f7','#9333ea','#7e22ce','#6b21a8'] },
+    { id: 'red', label: 'Red', shades: ['#fef2f2','#fee2e2','#fecaca','#fca5a5','#f87171','#ef4444','#dc2626','#b91c1c','#991b1b'] },
+    { id: 'teal', label: 'Teal', shades: ['#f0fdfa','#ccfbf1','#99f6e4','#5eead4','#2dd4bf','#14b8a6','#0d9488','#0f766e','#115e59'] },
+    { id: 'orange', label: 'Orange', shades: ['#fff7ed','#ffedd5','#fed7aa','#fdba74','#fb923c','#f97316','#ea580c','#c2410c','#9a3412'] },
+  ];
+  const applyTheme = (id: string) => {
+    const selected = colorThemes.find((item) => item.id === id) ?? colorThemes[1];
+    selected.shades.forEach((hex, index) => document.documentElement.style.setProperty('--brand-' + (index === 0 ? 50 : index * 100), hex));
+    document.documentElement.style.setProperty('--accent-500', selected.shades[5]);
+    document.documentElement.style.setProperty('--accent-600', selected.shades[6]);
+    localStorage.setItem('queuesystem-theme', selected.id);
+    setThemeColor(selected.id);
+  };
+  useEffect(() => { applyTheme(localStorage.getItem('queuesystem-theme') || 'green'); }, []);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [orgNameEn, setOrgNameEn] = useState('INFINITY SERVICES');
   useEffect(() => {
@@ -115,6 +134,17 @@ export function AppLayout({ active, children }: { active: ModuleId; children: Re
       <main className="min-w-0 flex-1 overflow-y-auto">
         {children}
       </main>
+      {role === 'admin' && (
+        <div className="fixed right-5 top-5 z-40">
+          <button type="button" onClick={() => setShowColorPalette((open) => !open)} className="flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 bg-white text-navy-700 shadow-lg hover:bg-slate-50" title="Change system colors" aria-label="Change system colors"><Palette className="h-5 w-5" /></button>
+          {showColorPalette && <div className="mt-2 w-64 rounded-xl border border-slate-200 bg-white p-4 shadow-xl">
+            <div className="mb-3 flex items-center justify-between"><h2 className="text-sm font-bold text-navy-900">System Color Theme</h2><button onClick={() => setShowColorPalette(false)} aria-label="Close"><X className="h-4 w-4" /></button></div>
+            <div className="grid grid-cols-2 gap-2">
+              {colorThemes.map((theme) => <button key={theme.id} type="button" onClick={() => applyTheme(theme.id)} className={`flex items-center gap-2 rounded-lg border p-2 text-sm ${themeColor === theme.id ? 'border-brand-600 bg-brand-50 font-semibold' : 'border-slate-200 hover:bg-slate-50'}`}><span className="h-5 w-5 rounded-full border border-black/10" style={{ backgroundColor: theme.shades[5] }} />{theme.label}{themeColor === theme.id && <span className="ml-auto text-brand-700">✓</span>}</button>)}
+            </div><p className="mt-3 text-xs text-slate-400">Saved on this computer.</p>
+          </div>}
+        </div>
+      )}
       {role === 'admin' && showPasswordForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <form onSubmit={async (event: FormEvent) => {
