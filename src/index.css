@@ -4,6 +4,21 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --brand-50: #f7faed;
+  --brand-100: #edf4d7;
+  --brand-200: #dce9b2;
+  --brand-300: #c5dc7e;
+  --brand-400: #afd052;
+  --brand-500: #9cc53b;
+  --brand-600: #9cc53b;
+  --brand-700: #7f9f2e;
+  --brand-800: #637d25;
+  --brand-900: #46591b;
+  --accent-500: #9cc53b;
+  --accent-600: #7f9f2e;
+}
+
 @layer base {
   html {
     -webkit-font-smoothing: antialiased;
@@ -46,3 +61,8 @@
 .animate-fade-in-up {
   animation: fade-in-up 0.4s ease-out both;
 }
+
+
+/* Receptionist gets a clean, full-window ticket kiosk without admin navigation. */
+.reception-kiosk { width: 100%; min-height: 100vh; }
+.reception-kiosk > main { width: 100%; min-height: 100vh; }
