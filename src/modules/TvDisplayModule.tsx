@@ -79,6 +79,8 @@ export function TvDisplayModule() {
     if (audioUnlocked && voiceEnabled) {
       voiceEnabledRef.current = false;
       if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+      try { arabicSourceRef.current?.stop(); } catch { /* clip may have already ended */ }
+      arabicSourceRef.current = null;
       setVoiceEnabled(false);
       return;
     }
