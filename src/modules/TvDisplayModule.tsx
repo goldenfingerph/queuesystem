@@ -35,8 +35,8 @@ export function TvDisplayModule() {
   const [audioUnlocked, setAudioUnlocked] = useState(false);
   const { lastMessage } = useWebSocket();
   const lastSpokenRef = useRef<Set<number>>(new Set());
-  const arabicAudioBufferRef = useRef<AudioBuffer | null>(null);
-  const arabicAudioBufferPromiseRef = useRef<Promise<AudioBuffer> | null>(null);
+  const arabicAudioBuffersRef = useRef<Map<string, AudioBuffer>>(new Map());
+  const arabicAudioPromisesRef = useRef<Map<string, Promise<AudioBuffer>>(new Map());
   const arabicSourceRef = useRef<AudioBufferSourceNode | null>(null);
 
   // Load initial state
@@ -123,9 +123,6 @@ export function TvDisplayModule() {
   };
 
   // Load Fatima's original MP3 recordings individually and cache decoded clips.
-  const arabicAudioBuffersRef = useRef<Map<string, AudioBuffer>>(new Map());
-  const arabicAudioPromisesRef = useRef<Map<string, Promise<AudioBuffer>>>(new Map());
-
   const loadArabicAudioClip = useCallback(async (context: AudioContext, name: string) => {
     const cached = arabicAudioBuffersRef.current.get(name);
     if (cached) return cached;
