@@ -40,12 +40,12 @@ export function AppLayout({ active, children }: { active: ModuleId; children: Re
   const [showColorPalette, setShowColorPalette] = useState(false);
   const [themeColor, setThemeColor] = useState('green');
   const colorThemes = [
-    { id: 'blue', label: 'Blue', shades: ['#eff6ff','#dbeafe','#bfdbfe','#93c5fd','#60a5fa','#3b82f6','#2563eb','#1d4ed8','#1e40af'] },
-    { id: 'green', label: 'Green', shades: ['#f7faed','#edf4d7','#dce9b2','#c5dc7e','#afd052','#9cc53b','#7f9f2e','#637d25','#46591b'] },
-    { id: 'purple', label: 'Purple', shades: ['#faf5ff','#f3e8ff','#e9d5ff','#d8b4fe','#c084fc','#a855f7','#9333ea','#7e22ce','#6b21a8'] },
-    { id: 'red', label: 'Red', shades: ['#fef2f2','#fee2e2','#fecaca','#fca5a5','#f87171','#ef4444','#dc2626','#b91c1c','#991b1b'] },
-    { id: 'teal', label: 'Teal', shades: ['#f0fdfa','#ccfbf1','#99f6e4','#5eead4','#2dd4bf','#14b8a6','#0d9488','#0f766e','#115e59'] },
-    { id: 'orange', label: 'Orange', shades: ['#fff7ed','#ffedd5','#fed7aa','#fdba74','#fb923c','#f97316','#ea580c','#c2410c','#9a3412'] },
+    { id: 'blue', label: 'Blue', shades: ['#eff6ff','#dbeafe','#bfdbfe','#93c5fd','#60a5fa','#3b82f6','#2563eb','#1d4ed8','#1e40af','#1e3a8a'] },
+    { id: 'green', label: 'Green', shades: ['#f7faed','#edf4d7','#dce9b2','#c5dc7e','#afd052','#9cc53b','#7f9f2e','#637d25','#46591b','#344315'] },
+    { id: 'purple', label: 'Purple', shades: ['#faf5ff','#f3e8ff','#e9d5ff','#d8b4fe','#c084fc','#a855f7','#9333ea','#7e22ce','#6b21a8','#581c87'] },
+    { id: 'red', label: 'Red', shades: ['#fef2f2','#fee2e2','#fecaca','#fca5a5','#f87171','#ef4444','#dc2626','#b91c1c','#991b1b','#7f1d1d'] },
+    { id: 'teal', label: 'Teal', shades: ['#f0fdfa','#ccfbf1','#99f6e4','#5eead4','#2dd4bf','#14b8a6','#0d9488','#0f766e','#115e59','#134e4a'] },
+    { id: 'orange', label: 'Orange', shades: ['#fff7ed','#ffedd5','#fed7aa','#fdba74','#fb923c','#f97316','#ea580c','#c2410c','#9a3412','#7c2d12'] },
   ];
   const applyTheme = (id: string) => {
     const selected = colorThemes.find((item) => item.id === id) ?? colorThemes[1];
