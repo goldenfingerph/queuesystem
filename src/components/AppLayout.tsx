@@ -62,8 +62,8 @@ export function AppLayout({ active, children }: { active: ModuleId; children: Re
   }));
 
   return (
-    <div className="flex h-screen bg-slate-50">
-      <aside className="flex w-64 flex-col bg-navy-950 text-white">
+    <div className={`flex h-screen bg-slate-50 ${role === "receptionist" ? "reception-kiosk" : ""}`}>
+      {role !== "receptionist" && <aside className="flex w-64 flex-col bg-navy-950 text-white">
         <div className="flex h-16 items-center gap-3 border-b border-navy-800 px-5">
           <div className="grid h-9 w-9 place-items-center rounded-lg bg-gradient-to-br from-brand-500 to-accent-500">
             {logoUrl ? <img src={logoUrl} alt="Organization logo" className="h-full w-full rounded-lg object-contain p-0.5" /> : <ShieldCheck className="h-5 w-5" strokeWidth={2.4} />}
@@ -111,8 +111,8 @@ export function AppLayout({ active, children }: { active: ModuleId; children: Re
             Sign out
           </button>
         </div>
-      </aside>
-      <main className="flex-1 overflow-y-auto">
+      </aside>}
+      <main className="min-w-0 flex-1 overflow-y-auto">
         {children}
       </main>
       {role === 'admin' && showPasswordForm && (
