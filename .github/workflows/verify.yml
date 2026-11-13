@@ -224,7 +224,6 @@ jobs:
 
       - name: Publish public Windows 11 release candidate assets
         if: ${{ false }}
-        if: github.event_name == 'push' && github.ref == 'refs/heads/stable/windows11-release-candidate'
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
