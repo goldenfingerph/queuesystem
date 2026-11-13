@@ -19,7 +19,7 @@ export function settingsRouter(): Router {
       res.status(400).json({ error: 'settings object required' });
       return;
     }
-    const allowedKeys = new Set(['ticket_padding', 'queue_mode', 'ads_enabled', 'ads_interval_sec', 'language', 'org_name_en', 'org_name_ar', 'tv_recent_calls', 'voice_enabled', 'bell_enabled', 'display_theme']);
+    const allowedKeys = new Set(['ticket_padding', 'queue_mode', 'ads_enabled', 'ads_interval_sec', 'language', 'org_name_en', 'org_name_ar', 'tv_recent_calls', 'voice_enabled', 'bell_enabled', 'display_theme', 'business_timezone', 'business_day_start']);
     const entries = Object.entries(settings);
     if (entries.some(([key, value]) => !allowedKeys.has(key) || !['string', 'number', 'boolean'].includes(typeof value))) {
       res.status(400).json({ error: 'One or more settings are invalid or unsupported' }); return;
@@ -54,6 +54,16 @@ export function settingsRouter(): Router {
     }
     if (settings.display_theme !== undefined && (typeof settings.display_theme !== 'string' || !/^[a-zA-Z0-9_-]{1,30}$/.test(settings.display_theme))) {
       res.status(400).json({ error: 'display_theme is invalid' }); return;
+    }
+    if (settings.business_timezone !== undefined) {
+      if (typeof settings.business_timezone !== 'string' || settings.business_timezone.length > 80) {
+        res.status(400).json({ error: 'business_timezone must be a valid IANA timezone' }); return;
+      }
+      try { new Intl.DateTimeFormat('en-US', { timeZone: settings.business_timezone }); }
+      catch { res.status(400).json({ error: 'business_timezone must be a valid IANA timezone' }); return; }
+    }
+    if (settings.business_day_start !== undefined && (typeof settings.business_day_start !== 'string' || !/^([01]\\d|2[0-3]):[0-5]\\d$/.test(settings.business_day_start))) {
+      res.status(400).json({ error: 'business_day_start must use HH:mm format' }); return;
     }
     const db = getDb();
     const tx = db.transaction(() => {
