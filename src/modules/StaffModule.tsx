@@ -46,6 +46,8 @@ export function StaffModule() {
   const [loadError, setLoadError] = useState('');
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [auditLoading, setAuditLoading] = useState(false);
+  const [auditLoadingMore, setAuditLoadingMore] = useState(false);
+  const [auditHasMore, setAuditHasMore] = useState(false);
   const [auditError, setAuditError] = useState('');
 
 
@@ -63,11 +65,28 @@ export function StaffModule() {
     try {
       const result = await api.get<{ logs: AuditLog[] }>('/staff/audit-logs?limit=100');
       setAuditLogs(result.logs);
+      setAuditHasMore(result.logs.length === 100);
       setAuditError('');
     } catch (err) {
       setAuditError(err instanceof Error ? err.message : 'Unable to load activity history');
     } finally {
       setAuditLoading(false);
+    }
+  };
+
+  const loadOlderAuditLogs = async () => {
+    const oldestId = auditLogs[auditLogs.length - 1]?.id;
+    if (!oldestId || auditLoadingMore || !auditHasMore) return;
+    setAuditLoadingMore(true);
+    try {
+      const result = await api.get<{ logs: AuditLog[] }>(`/staff/audit-logs?limit=100&before_id=${oldestId}`);
+      setAuditLogs((current) => [...current, ...result.logs]);
+      setAuditHasMore(result.logs.length === 100);
+      setAuditError('');
+    } catch (err) {
+      setAuditError(err instanceof Error ? err.message : 'Unable to load older activity');
+    } finally {
+      setAuditLoadingMore(false);
     }
   };
 
@@ -228,7 +247,12 @@ export function StaffModule() {
                 </table>
               </div>
             )}
-          <p className="border-t border-slate-100 px-5 py-2 text-xs text-navy-400">Showing the latest 100 events. Activity records are read-only.</p>
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-5 py-3">
+            <p className="text-xs text-navy-400">Showing {auditLogs.length} activity events. Records are read-only.</p>
+            {auditHasMore && <button className="btn-ghost !py-1.5 !text-xs" onClick={() => void loadOlderAuditLogs()} disabled={auditLoadingMore}>
+              {auditLoadingMore ? 'Loading older activity...' : 'Load Older Activity'}
+            </button>}
+          </div>
         </section>
         {loading ? <p className="text-navy-400">Loading...</p> : (
           <div className="surface overflow-hidden">
