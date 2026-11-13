@@ -6,6 +6,7 @@ import { authMiddleware, requireRole } from './lib/middleware.js';
 import { getDb } from './db/index.js';
 import { healthRouter } from './routes/health.js';
 import { authRouter } from './routes/auth.js';
+import { setupRouter } from './routes/setup.js';
 import { servicesRouter } from './routes/services.js';
 import { countersRouter } from './routes/counters.js';
 import { staffRouter } from './routes/staff.js';
@@ -51,6 +52,7 @@ export function createApp(): Express {
   app.use(express.urlencoded({ extended: true, limit: '2mb', parameterLimit: 100 }));
 
   app.use(healthRouter());
+  app.use('/api/setup', setupRouter());
   app.use('/api/auth', authRouter());
 
   // Public read-only data needed by the welcome/reception screens and TV.
