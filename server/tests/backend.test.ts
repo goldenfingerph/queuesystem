@@ -381,8 +381,8 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
     assert.equal(setupResult.user.display_name, 'Test Administrator');
     assert.equal(setupResult.user.role, 'admin');
     assert.ok(setupResult.token.length > 20, 'setup completion must create an authenticated admin session');
-    const configuredAdmin = db.prepare('SELECT username, password_hash, is_active FROM users WHERE id = ?')
-      .get(setupResult.user.id) as { username: string; password_hash: string; is_active: number };
+    const configuredAdmin = db.prepare('SELECT username, password_hash, is_active FROM users WHERE username = ? AND role = ?')
+      .get(setupResult.user.username, 'admin') as { username: string; password_hash: string; is_active: number };
     assert.equal(configuredAdmin.username, setupResult.user.username, 'setup must persist the selected admin username');
     assert.equal(configuredAdmin.is_active, 1, 'setup must leave the initial administrator active');
     assert.equal(auth.verifyPassword(firstRunPassword, configuredAdmin.password_hash), true,
