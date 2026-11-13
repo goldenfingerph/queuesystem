@@ -81,6 +81,10 @@ export function authRouter(): Router {
     if (!user || !user.is_active || !verifyPassword(password, user.password_hash)) {
       recordFailure(failedLogins, key, MAX_LOGIN_FAILURES_PER_ACCOUNT, MAX_TRACKED_LOGIN_KEYS, now);
       recordFailure(failedLoginsByIp, ip, MAX_LOGIN_FAILURES_PER_IP, MAX_TRACKED_IPS, now);
+      writeAuditLog(db, {
+        actorUserId: null, actorUsername: username.trim().slice(0, 100), ipAddress: ip,
+        action: 'auth.login.failed', targetType: 'user',
+      });
       res.status(401).json({ error: 'Invalid credentials' });
       return;
     }
