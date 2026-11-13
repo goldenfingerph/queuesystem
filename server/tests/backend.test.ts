@@ -367,6 +367,8 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
       body: JSON.stringify({
         organizationNameEn: 'Test Organization',
         organizationNameAr: 'مؤسسة الاختبار',
+        businessTimezone: 'Asia/Dubai',
+        businessDayStart: '06:00',
         username: 'admin',
         displayName: 'Test Administrator',
         password: firstRunPassword,
@@ -388,6 +390,8 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
       body: JSON.stringify({
         organizationNameEn: 'Another Organization',
         organizationNameAr: 'مؤسسة أخرى',
+        businessTimezone: 'Asia/Dubai',
+        businessDayStart: '06:00',
         username: 'admin',
         displayName: 'Another Administrator',
         password: firstRunPassword,
