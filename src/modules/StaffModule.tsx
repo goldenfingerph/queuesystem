@@ -1,11 +1,16 @@
 import { useEffect, useState } from 'react';
-import { Plus, Pencil, Trash2, X, Users, ShieldCheck } from 'lucide-react';
+import { Plus, Pencil, Trash2, X, Users, ShieldCheck, Activity, RefreshCw } from 'lucide-react';
 import { api } from '@/lib/api';
 import { AppLayout } from '@/components/AppLayout';
 import { STAFF_ROLES, type StaffRole } from '@/types/domain';
 
 interface CounterOption { id: number; number: number; name: string; is_active: number }
 interface Assignment { id: number; user_id: number; counter_id: number; status: string; display_name: string; counter_number: number; counter_name: string }
+
+interface AuditLog {
+  id: number; actor_username: string; action: string; target_type: string | null;
+  target_id: string | null; details: Record<string, unknown>; ip_address: string | null; created_at: string;
+}
 
 interface StaffMember {
   id: number; username: string; display_name: string; role: StaffRole;
@@ -39,6 +44,10 @@ export function StaffModule() {
   const [assignCounter, setAssignCounter] = useState('');
   const [assignmentError, setAssignmentError] = useState('');
   const [loadError, setLoadError] = useState('');
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
+  const [auditLoading, setAuditLoading] = useState(false);
+  const [auditError, setAuditError] = useState('');
+
 
   const load = () => {
     setLoading(true);
@@ -48,6 +57,22 @@ export function StaffModule() {
       .finally(() => setLoading(false));
   };
   useEffect(load, []);
+
+  const loadAuditLogs = async () => {
+    setAuditLoading(true);
+    try {
+      const result = await api.get<{ logs: AuditLog[] }>('/staff/audit-logs?limit=100');
+      setAuditLogs(result.logs);
+      setAuditError('');
+    } catch (err) {
+      setAuditError(err instanceof Error ? err.message : 'Unable to load activity history');
+    } finally {
+      setAuditLoading(false);
+    }
+  };
+
+  useEffect(() => { void loadAuditLogs(); }, []);
+
 
   const loadAssignments = async () => {
     try {
@@ -171,6 +196,40 @@ export function StaffModule() {
         </section>
 
         {loadError && <div className="mb-4 text-sm text-error-600" role="alert">{loadError}<button onClick={load} className="ml-3 underline">Retry</button></div>}
+
+        <section className="surface mb-6 overflow-hidden">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
+            <div>
+              <h2 className="flex items-center gap-2 text-lg font-bold text-navy-900"><Activity className="h-5 w-5 text-brand-600" /> Activity History</h2>
+              <p className="text-xs text-navy-500">Recent sign-ins, password changes, staff account changes, and counter assignments</p>
+            </div>
+            <button className="btn-ghost !py-1.5 !text-xs" onClick={() => void loadAuditLogs()} disabled={auditLoading}>
+              <RefreshCw className={`h-3.5 w-3.5 ${auditLoading ? 'animate-spin' : ''}`} /> Refresh
+            </button>
+          </div>
+          {auditError && <p className="px-5 py-3 text-sm text-error-600" role="alert">{auditError}</p>}
+          {auditLoading && auditLogs.length === 0 ? <p className="px-5 py-4 text-sm text-navy-400">Loading activity...</p> :
+            auditLogs.length === 0 ? <p className="px-5 py-4 text-sm text-navy-400">No activity recorded yet.</p> : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-navy-500">
+                    <tr><th className="px-5 py-2.5">Time</th><th className="px-5 py-2.5">User</th><th className="px-5 py-2.5">Activity</th><th className="px-5 py-2.5">Details</th></tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {auditLogs.map((log) => (
+                      <tr key={log.id}>
+                        <td className="whitespace-nowrap px-5 py-3 text-xs text-navy-500">{new Date(`${log.created_at.replace(' ', 'T')}Z`).toLocaleString()}</td>
+                        <td className="px-5 py-3 font-medium text-navy-800">{log.actor_username}</td>
+                        <td className="px-5 py-3 text-navy-700">{log.action.replaceAll('.', ' ')}</td>
+                        <td className="max-w-sm px-5 py-3 text-xs text-navy-500">{log.target_type ? `${log.target_type}${log.target_id ? ` #${log.target_id}` : ''}` : '—'}{Object.keys(log.details ?? {}).length > 0 ? ` · ${Object.entries(log.details).map(([key, value]) => `${key}: ${String(value)}`).join(', ')}` : ''}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          <p className="border-t border-slate-100 px-5 py-2 text-xs text-navy-400">Showing the latest 100 events. Activity records are read-only.</p>
+        </section>
         {loading ? <p className="text-navy-400">Loading...</p> : (
           <div className="surface overflow-hidden">
             <div className="overflow-x-auto">
