@@ -4,6 +4,7 @@ import path from 'node:path';
 import { config } from '../config.js';
 import { getDb } from '../db/index.js';
 import { rotateBackups } from '../lib/backup-retention.js';
+import { writeAuditLog } from '../lib/audit-log.js';
 
 const BACKUP_RETENTION_COUNT = 30;
 
@@ -26,6 +27,11 @@ export function backupRouter(): Router {
       // Rotation runs only after the new backup and its metadata are safely
       // written. Failures pruning older files never invalidate this backup.
       const rotated = rotateBackups(db, config.backupsDir, BACKUP_RETENTION_COUNT);
+      writeAuditLog(db, {
+        actorUserId: req.user!.id, actorUsername: req.user!.username, ipAddress: req.socket.remoteAddress,
+        action: 'backup.created', targetType: 'backup', targetId: filename,
+        details: { sizeBytes: stat.size, rotated },
+      });
       res.json({ status: 'ok', filename, sizeBytes: stat.size, retentionCount: BACKUP_RETENTION_COUNT, rotated });
     } catch (err) {
       if (dest && fs.existsSync(dest)) fs.rmSync(dest, { force: true });
@@ -55,6 +61,10 @@ export function backupRouter(): Router {
     if (!file.startsWith(path.resolve(config.backupsDir) + path.sep) || !fs.existsSync(file) || !fs.statSync(file).isFile()) {
       res.status(404).json({ error: 'Backup file not found' }); return;
     }
+    writeAuditLog(getDb(), {
+      actorUserId: req.user!.id, actorUsername: req.user!.username, ipAddress: req.socket.remoteAddress,
+      action: 'backup.downloaded', targetType: 'backup', targetId: id,
+    });
     res.download(file, row.filename);
   });
 
