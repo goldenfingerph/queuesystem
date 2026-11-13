@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { getDb } from '../db/index.js';
 import { broadcast } from '../ws/index.js';
 import { requireRole } from '../lib/middleware.js';
-import { getBusinessDate } from '../../shared/business-date.js';
+import { getConfiguredBusinessDate } from '../lib/business-date.js';
 
 export function ticketsRouter(): Router {
   const router = Router();
@@ -118,7 +118,7 @@ export function ticketsRouter(): Router {
       priorityRank = vc.priority_rank;
     }
 
-    const day = getBusinessDate();
+    const day = getConfiguredBusinessDate(db);
     const ticket = db.transaction(() => {
       const ticketNumber = allocateNumber(Number(service_id), svc.ticket_range_start, svc.ticket_range_end, day);
       if (!ticketNumber) return null;
