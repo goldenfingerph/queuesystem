@@ -40,9 +40,12 @@ export function SystemSettingsModule() {
     const orgNameAr = (settings.org_name_ar ?? '').trim();
     const interval = Number(settings.ads_interval_sec ?? '15');
     const recentCalls = Number(settings.tv_recent_calls ?? '6');
+    const businessTimezone = (settings.business_timezone ?? 'Asia/Dubai').trim();
+    const businessDayStart = settings.business_day_start ?? '06:00';
     if (!orgNameEn || orgNameEn.length > 100 || !orgNameAr || orgNameAr.length > 100) { setSavedMsg('Organization names are required and must be 100 characters or fewer.'); return; }
     if (!Number.isInteger(interval) || interval < 5 || interval > 360) { setSavedMsg('Advertisement interval must be a whole number from 5 to 360 seconds.'); return; }
     if (!Number.isInteger(recentCalls) || recentCalls < 1 || recentCalls > 20) { setSavedMsg('TV recent calls count must be a whole number from 1 to 20.'); return; }
+    if (!businessTimezone || businessTimezone.length > 80 || !/^(?:[01]\\d|2[0-3]):[0-5]\\d$/.test(businessDayStart)) { setSavedMsg('Enter a valid IANA timezone and business-day start time.'); return; }
     setSaving(true);
     setSavedMsg('');
     try {
@@ -58,6 +61,8 @@ export function SystemSettingsModule() {
         voice_enabled: settings.voice_enabled === '1' ? '1' : '0',
         bell_enabled: settings.bell_enabled === '1' ? '1' : '0',
         ads_enabled: settings.ads_enabled === '1' ? '1' : '0',
+        business_timezone: businessTimezone,
+        business_day_start: businessDayStart,
       };
       await api.put('/settings', { settings: editableSettings });
       window.dispatchEvent(new Event('organization-settings-updated'));
@@ -216,6 +221,18 @@ export function SystemSettingsModule() {
                     <option value="ar">Arabic</option>
                     <option value="both">Bilingual</option>
                   </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-navy-400">Company Timezone (IANA)</label>
+                  <input className="input-field" maxLength={80} value={settings.business_timezone ?? 'Asia/Dubai'} onChange={(e) => setSettings({ ...settings, business_timezone: e.target.value })} placeholder="Asia/Dubai" />
+                  <p className="mt-1 text-xs text-navy-300">Example: Asia/Dubai, Europe/London, America/New_York</p>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-navy-400">Business Day Starts At</label>
+                  <input type="time" className="input-field" value={settings.business_day_start ?? '06:00'} onChange={(e) => setSettings({ ...settings, business_day_start: e.target.value })} />
+                  <p className="mt-1 text-xs text-navy-300">Queue date changes at this local time</p>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
