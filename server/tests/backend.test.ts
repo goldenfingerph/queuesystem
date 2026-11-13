@@ -294,6 +294,23 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
     });
     assert.equal(invalidAnalyticsService.status, 400);
 
+    const invalidDailyReportDate = await fetch('http://127.0.0.1:' + address.port + '/api/reports?date=2026-02-30', {
+      headers: { authorization: 'Bearer ' + token },
+    });
+    assert.equal(invalidDailyReportDate.status, 400, 'daily reports must reject impossible calendar dates');
+    const invalidDailyReportService = await fetch('http://127.0.0.1:' + address.port + '/api/reports?date=2026-11-08&serviceId=invalid', {
+      headers: { authorization: 'Bearer ' + token },
+    });
+    assert.equal(invalidDailyReportService.status, 400, 'daily reports must reject invalid service IDs');
+    const invalidExportDate = await fetch('http://127.0.0.1:' + address.port + '/api/reports/export?date=2026-02-30', {
+      headers: { authorization: 'Bearer ' + token },
+    });
+    assert.equal(invalidExportDate.status, 400, 'CSV export must reject impossible calendar dates');
+    const invalidExportService = await fetch('http://127.0.0.1:' + address.port + '/api/reports/export?date=2026-11-08&serviceId=invalid', {
+      headers: { authorization: 'Bearer ' + token },
+    });
+    assert.equal(invalidExportService.status, 400, 'CSV export must reject invalid service IDs');
+
     const filteredTicketPage = await fetch(`http://127.0.0.1:${address.port}/api/tickets?status=completed&serviceId=${sourceService}&page=2&limit=1`, {
       headers: { authorization: `Bearer ${token}` },
     });
