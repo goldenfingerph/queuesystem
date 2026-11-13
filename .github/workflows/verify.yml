@@ -3,7 +3,7 @@ run-name: Verify ${{ github.event_name }} on ${{ github.ref_name }}
 
 on:
   push:
-    branches: [main, restore-local-sqlite-lan, windows-batch-security-hardening, stable/windows11-release-candidate]
+    branches: [main]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -20,7 +20,7 @@ jobs:
     runs-on: windows-2022
     timeout-minutes: 30
     permissions:
-      contents: write
+      contents: read
     steps:
       - uses: actions/checkout@v4
         with:
@@ -69,14 +69,13 @@ jobs:
       - name: Lint frontend and backend
         run: npm run lint
       - name: Package Windows 11 project bundle
-        if: ${{ false }}
         shell: pwsh
         run: |
           $packageDir = Join-Path $env:RUNNER_TEMP "QueueSystem-Windows"
           New-Item -ItemType Directory -Force -Path $packageDir | Out-Null
 
           # Stage the complete application, Windows-built dependencies, and production frontend.
-          robocopy . $packageDir /E /XD .git .github node_modules/.cache /XF npm-audit.json
+          robocopy . $packageDir /E /XD .git .github node_modules/.cache server\data server\certs server\public\ads /XF npm-audit.json .env .env.local .env.*
           $robocopyExit = $LASTEXITCODE
           if ($robocopyExit -ge 8) { throw "Failed to stage Windows package (robocopy exit $robocopyExit)" }
           $global:LASTEXITCODE = 0
@@ -203,12 +202,10 @@ jobs:
           Get-FileHash -Path $zipPath -Algorithm SHA256 | Format-List Algorithm,Hash,Path
 
       - name: Install Inno Setup
-        if: ${{ false }}
         shell: pwsh
         run: choco install innosetup --no-progress -y
 
       - name: Build Windows Setup Wizard
-        if: ${{ false }}
         shell: pwsh
         run: |
           $packageDir = Join-Path $env:RUNNER_TEMP "QueueSystem-Windows"
@@ -239,7 +236,6 @@ jobs:
             --prerelease
 
       - name: Stage final release files
-        if: ${{ false }}
         shell: pwsh
         run: |
           $releaseDir = Join-Path $env:RUNNER_TEMP "QueueSystem-Windows11-Release"
@@ -247,16 +243,22 @@ jobs:
           Copy-Item (Join-Path $env:RUNNER_TEMP "QueueSystem-Windows11-Project.zip") $releaseDir
           Copy-Item (Join-Path $env:RUNNER_TEMP "QueueSystem-Setup.exe") $releaseDir
           @"
-          QueueSystem Windows 11 release candidate
+          QueueSystem Windows 11 installer validation artifact
           Source commit: $env:GITHUB_SHA
-          Installer: QueueSystem-Setup.exe
+          Installer: QueueSystem-Setup.exe (unsigned CI validation build)
           Portable project bundle: QueueSystem-Windows11-Project.zip
           Requires Windows 10/11 x64 only. Node.js 22 x64 and npm are bundled.
           No system-wide Node.js installation is required. Python is not required.
+          This artifact is for controlled testing, not a production release.
           "@ | Set-Content (Join-Path $releaseDir "README-FIRST.txt") -Encoding UTF8
+          Get-FileHash (Join-Path $releaseDir "QueueSystem-Setup.exe") -Algorithm SHA256 |
+            ForEach-Object { "$($_.Hash)  $($_.Path | Split-Path -Leaf)" } |
+            Set-Content (Join-Path $releaseDir "SHA256SUMS.txt") -Encoding ASCII
+          Get-FileHash (Join-Path $releaseDir "QueueSystem-Windows11-Project.zip") -Algorithm SHA256 |
+            ForEach-Object { "$($_.Hash)  $($_.Path | Split-Path -Leaf)" } |
+            Add-Content (Join-Path $releaseDir "SHA256SUMS.txt") -Encoding ASCII
 
       - name: Upload Windows 11 release bundle
-        if: ${{ false }}
         uses: actions/upload-artifact@v4
         with:
           name: QueueSystem-Windows11-Release
