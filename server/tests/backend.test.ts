@@ -705,6 +705,22 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
     const assignment = db.prepare('SELECT status FROM staff_assignments WHERE user_id = ?').get(userId) as { status: string };
     assert.equal(assignment.status, 'ended');
 
+    const unauthorizedAuditLogs = await fetch(`http://127.0.0.1:${address.port}/api/staff/audit-logs`);
+    assert.equal(unauthorizedAuditLogs.status, 401, 'audit history must require administrator authentication');
+    const auditLogsResponse = await fetch(`http://127.0.0.1:${address.port}/api/staff/audit-logs?limit=100`, {
+      headers: { authorization: `Bearer ${adminToken}` },
+    });
+    assert.equal(auditLogsResponse.status, 200, await auditLogsResponse.text());
+    const auditLogsData = await auditLogsResponse.json() as {
+      logs: { action: string; actor_username: string; details: Record<string, unknown> }[];
+    };
+    assert.ok(auditLogsData.logs.some((log) => log.action === 'staff.account.updated' && log.actor_username === 'admin'),
+      'staff account changes must be visible in the admin activity history');
+    assert.ok(auditLogsData.logs.some((log) => log.action === 'auth.login.succeeded'),
+      'successful sign-ins must be visible in the admin activity history');
+    assert.equal(auditLogsData.logs.some((log) => JSON.stringify(log).includes(firstRunPassword)), false,
+      'audit history must never expose passwords');
+
     // Five failures for one username block that account/IP pair and return a
     // Retry-After hint without revealing whether the username exists.
     for (let attempt = 0; attempt < 5; attempt += 1) {
