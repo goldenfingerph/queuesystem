@@ -717,7 +717,7 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
     const auditLogsResponse = await fetch(`http://127.0.0.1:${address.port}/api/staff/audit-logs?limit=100`, {
       headers: { authorization: `Bearer ${adminToken}` },
     });
-    assert.equal(auditLogsResponse.status, 200, await auditLogsResponse.text());
+    assert.equal(auditLogsResponse.status, 200, await auditLogsResponse.clone().text());
     const auditLogsData = await auditLogsResponse.json() as {
       logs: { action: string; actor_username: string; details: Record<string, unknown> }[];
     };
@@ -749,6 +749,19 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
     });
     assert.equal(accountBlocked.status, 429);
     assert.ok(Number(accountBlocked.headers.get('retry-after')) > 0);
+
+    const failedLoginAuditResponse = await fetch(`http://127.0.0.1:${address.port}/api/staff/audit-logs?limit=200`, {
+      headers: { authorization: `Bearer ${adminToken}` },
+    });
+    assert.equal(failedLoginAuditResponse.status, 200, await failedLoginAuditResponse.clone().text());
+    const failedLoginAuditData = await failedLoginAuditResponse.json() as {
+      logs: { action: string; actor_username: string }[];
+    };
+    assert.ok(failedLoginAuditData.logs.some((log) =>
+      log.action === 'auth.login.failed' && log.actor_username === 'rate-limit-account'),
+    'failed sign-in attempts must be visible in the admin activity history');
+    assert.equal(JSON.stringify(failedLoginAuditData.logs).includes('wrong-password'), false,
+      'failed sign-in audit events must never expose passwords');
 
     // A second limit applies across different usernames from the same IP.
     // One earlier failed admin login plus the five above leaves 14 attempts.
