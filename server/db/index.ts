@@ -9,6 +9,13 @@ import path from 'node:path';
 const KNOWN_DEFAULT_ADMIN_HASH = '$2b$10$uQaqQDxB7.NM8eXTGYxoZevoFmqBzmR89T81uUHI28BZj4Gv9BT0i';
 
 function secureDefaultAdminPassword(db: Database.Database): void {
+  // The first-run wizard sets the administrator credentials directly; do not
+  // generate and print a temporary password for a brand-new installation.
+  const setup = db.prepare('SELECT completed FROM setup_state WHERE id = 1').get() as { completed: number } | undefined;
+  if (setup?.completed === 0) {
+    delete process.env.ADMIN_INITIAL_PASSWORD;
+    return;
+  }
   const admin = db.prepare('SELECT id, password_hash FROM users WHERE username = ?').get('admin') as
     | { id: number; password_hash: string }
     | undefined;
