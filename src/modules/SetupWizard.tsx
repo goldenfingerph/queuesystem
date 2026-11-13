@@ -6,6 +6,8 @@ export function SetupWizard() {
   const [organizationNameEn, setOrganizationNameEn] = useState('');
   const [organizationNameAr, setOrganizationNameAr] = useState('');
   const [language, setLanguage] = useState('en');
+  const [businessTimezone, setBusinessTimezone] = useState('Asia/Dubai');
+  const [businessDayStart, setBusinessDayStart] = useState('06:00');
   const [username, setUsername] = useState('admin');
   const [displayName, setDisplayName] = useState('System Administrator');
   const [password, setPassword] = useState('');
@@ -21,7 +23,7 @@ export function SetupWizard() {
     setBusy(true);
     try {
       const result = await api.post<{ token: string }>('/setup/complete', {
-        organizationNameEn, organizationNameAr, language, username, displayName, password,
+        organizationNameEn, organizationNameAr, language, businessTimezone, businessDayStart, username, displayName, password,
       });
       setToken(result.token);
       window.location.reload();
@@ -62,6 +64,16 @@ export function SetupWizard() {
                 <option value="en">English</option><option value="ar">Arabic</option><option value="both">Bilingual (English and Arabic)</option>
               </select>
             </label>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <label className="block text-xs font-semibold text-navy-600">Company timezone (IANA)
+                <input required maxLength={80} className={field + ' mt-1.5'} value={businessTimezone} onChange={(e) => setBusinessTimezone(e.target.value)} placeholder="Asia/Dubai" />
+                <span className="mt-1 block font-normal text-navy-400">Example: Asia/Dubai, Europe/London, America/New_York</span>
+              </label>
+              <label className="block text-xs font-semibold text-navy-600">Business day starts at
+                <input required type="time" className={field + ' mt-1.5'} value={businessDayStart} onChange={(e) => setBusinessDayStart(e.target.value)} />
+                <span className="mt-1 block font-normal text-navy-400">Tickets reset according to this local time</span>
+              </label>
+            </div>
           </section>
 
           <div className="border-t border-slate-100" />
