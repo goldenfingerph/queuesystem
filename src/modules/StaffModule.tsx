@@ -220,7 +220,7 @@ export function StaffModule() {
                       <tr key={log.id}>
                         <td className="whitespace-nowrap px-5 py-3 text-xs text-navy-500">{new Date(`${log.created_at.replace(' ', 'T')}Z`).toLocaleString()}</td>
                         <td className="px-5 py-3 font-medium text-navy-800">{log.actor_username}</td>
-                        <td className="px-5 py-3 text-navy-700">{log.action.replaceAll('.', ' ')}</td>
+                        <td className="px-5 py-3 text-navy-700">{log.action.replace(/\./g, ' ')}</td>
                         <td className="max-w-sm px-5 py-3 text-xs text-navy-500">{log.target_type ? `${log.target_type}${log.target_id ? ` #${log.target_id}` : ''}` : '—'}{Object.keys(log.details ?? {}).length > 0 ? ` · ${Object.entries(log.details).map(([key, value]) => `${key}: ${String(value)}`).join(', ')}` : ''}</td>
                       </tr>
                     ))}
