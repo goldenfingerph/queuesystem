@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { getDb } from '../db/index.js';
 import { requireRole } from '../lib/middleware.js';
+import { writeAuditLog } from '../lib/audit-log.js';
 
 export function settingsRouter(): Router {
   const router = Router();
@@ -66,6 +67,7 @@ export function settingsRouter(): Router {
       res.status(400).json({ error: 'business_day_start must use HH:mm format' }); return;
     }
     const db = getDb();
+    const changedKeys = entries.map(([key]) => key).sort();
     const tx = db.transaction(() => {
       const stmt = db.prepare(
         "INSERT INTO system_settings (key, value, updated_at) VALUES (?, ?, datetime('now')) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at",
@@ -73,6 +75,11 @@ export function settingsRouter(): Router {
       for (const [key, value] of Object.entries(settings)) {
         stmt.run(key, String(value));
       }
+      writeAuditLog(db, {
+        actorUserId: req.user!.id, actorUsername: req.user!.username, ipAddress: req.socket.remoteAddress,
+        action: 'settings.updated', targetType: 'system_settings',
+        details: { changedKeys: changedKeys.join(',') },
+      });
     });
     tx();
     res.json({ status: 'ok' });
@@ -107,6 +114,13 @@ export function settingsRouter(): Router {
     if (sets.length === 0) { res.status(400).json({ error: 'No fields to update' }); return; }
     vals.push(id);
     db.prepare(`UPDATE visitor_categories SET ${sets.join(', ')} WHERE id = ?`).run(...vals);
+    writeAuditLog(db, {
+      actorUserId: req.user!.id, actorUsername: req.user!.username, ipAddress: req.socket.remoteAddress,
+      action: 'settings.visitor_category.updated', targetType: 'visitor_category', targetId: Number(id),
+      details: { changedFields: [label_en !== undefined ? 'label_en' : null, label_ar !== undefined ? 'label_ar' : null,
+        priority_rank !== undefined ? 'priority_rank' : null, is_active !== undefined ? 'is_active' : null,
+        sort_order !== undefined ? 'sort_order' : null].filter(Boolean).join(',') },
+    });
     res.json({ status: 'ok' });
   });
 
