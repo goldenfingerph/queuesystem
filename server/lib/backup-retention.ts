@@ -22,13 +22,13 @@ export function rotateBackups(
   }
 
   const records = db.prepare(
-    "SELECT id, filename FROM backups WHERE filename GLOB 'infinity-backup-*.db' ORDER BY created_at DESC, id DESC",
+    "SELECT id, filename FROM backups WHERE (filename GLOB 'infinity-backup-*.db' OR filename GLOB 'queuesystem-backup-*.db') ORDER BY created_at DESC, id DESC",
   ).all() as BackupRecord[];
   let removed = 0;
 
   for (const record of records.slice(keepCount)) {
     if (path.basename(record.filename) !== record.filename ||
-        !/^infinity-backup-[\dTZ-]+\.db$/.test(record.filename)) {
+        !/^(?:queuesystem|infinity)-backup-[\dTZ-]+\.db$/.test(record.filename)) {
       continue;
     }
 
