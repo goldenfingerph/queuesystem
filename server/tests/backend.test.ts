@@ -95,12 +95,17 @@ test('backup rotation keeps newest regular backups and preserves restore safety 
   }
 });
 
-test('business date uses the Abu Dhabi 06:00 boundary regardless of host timezone', () => {
-  assert.equal(getBusinessDate(new Date('2026-11-08T01:59:59.000Z')), '2026-11-07', 'one second before 06:00 Abu Dhabi remains on the previous business day');
-  assert.equal(getBusinessDate(new Date('2026-11-08T02:00:00.000Z')), '2026-11-08', '06:00 Abu Dhabi starts the new business day');
-  assert.equal(getBusinessDate(new Date('2024-03-01T01:59:59.000Z')), '2024-02-29', 'business date handles leap-day rollover');
-  assert.equal(getBusinessDate(new Date('2024-03-01T02:00:00.000Z')), '2024-03-01', 'business date advances after the 06:00 boundary');
+test('business date supports company timezones and configurable rollover while preserving UAE defaults', () => {
+  assert.equal(getBusinessDate(new Date('2026-11-08T01:59:59.000Z')), '2026-11-07', 'UAE default: before 06:00 remains previous day');
+  assert.equal(getBusinessDate(new Date('2026-11-08T02:00:00.000Z')), '2026-11-08', 'UAE default: 06:00 starts new day');
+  assert.equal(getBusinessDate(new Date('2024-03-01T01:59:59.000Z')), '2024-02-29', 'default handles leap-day rollover');
+  assert.equal(getBusinessDate(new Date('2026-11-08T04:59:00.000Z'), { timeZone: 'America/New_York', dayStart: '00:00' }), '2026-11-07', 'New York midnight is evaluated in company timezone');
+  assert.equal(getBusinessDate(new Date('2026-11-08T05:00:00.000Z'), { timeZone: 'America/New_York', dayStart: '00:00' }), '2026-11-08', 'New York business day rolls over at local midnight');
+  assert.equal(getBusinessDate(new Date('2026-11-08T05:29:00.000Z'), { timeZone: 'Asia/Dubai', dayStart: '09:30' }), '2026-11-07', 'custom business start is respected');
+  assert.equal(getBusinessDate(new Date('2026-11-08T05:30:00.000Z'), { timeZone: 'Asia/Dubai', dayStart: '09:30' }), '2026-11-08', 'custom business start boundary is inclusive');
   assert.throws(() => getBusinessDate(new Date(Number.NaN)), /valid date/);
+  assert.throws(() => getBusinessDate(new Date(), { timeZone: 'Not/A_Timezone' }), /IANA timezone/);
+  assert.throws(() => getBusinessDate(new Date(), { dayStart: '24:00' }), /HH:mm/);
 });
 
 test('WebSocket origin policy only accepts the matching transport origin and host', () => {
