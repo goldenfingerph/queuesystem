@@ -2,11 +2,35 @@ import { Router } from 'express';
 import { getDb } from '../db/index.js';
 import { hashPassword } from '../lib/auth.js';
 import { broadcast } from '../ws/index.js';
+import { writeAuditLog } from '../lib/audit-log.js';
 
 const roles = ['admin', 'senior_clerk', 'service_officer', 'receptionist'];
 
 export function staffRouter(): Router {
   const router = Router();
+
+  router.get('/audit-logs', (req, res) => {
+    const limit = Math.min(200, Math.max(1, Number(req.query.limit) || 100));
+    const beforeId = req.query.before_id === undefined ? null : Number(req.query.before_id);
+    if (beforeId !== null && (!Number.isInteger(beforeId) || beforeId < 1)) {
+      res.status(400).json({ error: 'before_id must be a positive integer' }); return;
+    }
+    const rows = getDb().prepare(
+      `SELECT id, actor_user_id, actor_username, action, target_type, target_id,
+              details_json, ip_address, created_at
+       FROM audit_logs
+       WHERE (? IS NULL OR id < ?)
+       ORDER BY id DESC LIMIT ?`,
+    ).all(beforeId, beforeId, limit) as Array<{
+      id: number; actor_user_id: number | null; actor_username: string; action: string;
+      target_type: string | null; target_id: string | null; details_json: string;
+      ip_address: string | null; created_at: string;
+    }>;
+    res.json({ logs: rows.map(({ details_json, ...row }) => ({
+      ...row,
+      details: (() => { try { return JSON.parse(details_json); } catch { return {}; } })(),
+    })) });
+  });
 
   router.get('/', (_req, res) => {
     const rows = getDb().prepare(
@@ -43,6 +67,11 @@ export function staffRouter(): Router {
       if (occupied) throw new Error('Counter already has an active staff assignment');
       db.prepare("UPDATE staff_assignments SET status = 'ended', ended_at = datetime('now') WHERE user_id = ? AND status IN ('active', 'break')").run(user_id);
       const info = db.prepare("INSERT INTO staff_assignments (user_id, counter_id, status) VALUES (?, ?, 'active')").run(user_id, counter_id);
+      writeAuditLog(db, {
+        actorUserId: req.user!.id, actorUsername: req.user!.username, ipAddress: req.socket.remoteAddress,
+        action: 'staff.assignment.created', targetType: 'staff_assignment', targetId: info.lastInsertRowid,
+        details: { staffUserId: Number(user_id), counterId: Number(counter_id) },
+      });
       return info.lastInsertRowid;
     });
     try {
@@ -70,6 +99,11 @@ export function staffRouter(): Router {
         if (occupiedUser) throw new Error('Staff member already has an active counter assignment');
       }
       db.prepare("UPDATE staff_assignments SET status = ?, ended_at = CASE WHEN ? = 'ended' THEN datetime('now') ELSE NULL END WHERE id = ?").run(status, status, assignment.id);
+      writeAuditLog(db, {
+        actorUserId: req.user!.id, actorUsername: req.user!.username, ipAddress: req.socket.remoteAddress,
+        action: 'staff.assignment.updated', targetType: 'staff_assignment', targetId: assignment.id,
+        details: { staffUserId: assignment.user_id, counterId: assignment.counter_id, fromStatus: assignment.status, toStatus: status },
+      });
     });
     try {
       updateAssignment();
@@ -89,8 +123,14 @@ export function staffRouter(): Router {
       res.status(400).json({ error: 'Enter a valid username, display name, role, and password (at least 12 characters)' }); return;
     }
     try {
-      getDb().prepare('INSERT INTO users (username, password_hash, display_name, role) VALUES (?, ?, ?, ?)')
+      const db = getDb();
+      const created = db.prepare('INSERT INTO users (username, password_hash, display_name, role) VALUES (?, ?, ?, ?)')
         .run(username, hashPassword(password), display_name.trim(), role);
+      writeAuditLog(db, {
+        actorUserId: req.user!.id, actorUsername: req.user!.username, ipAddress: req.socket.remoteAddress,
+        action: 'staff.account.created', targetType: 'user', targetId: created.lastInsertRowid,
+        details: { username, displayName: display_name.trim(), role },
+      });
       broadcast('staff-updated', {});
       res.json({ status: 'ok' });
     } catch (err) {
@@ -128,6 +168,15 @@ export function staffRouter(): Router {
           if (count.n <= 1) throw new Error('LAST_ACTIVE_ADMIN');
         }
         db.prepare(`UPDATE users SET ${sets.join(', ')} WHERE id = ?`).run(...vals);
+        writeAuditLog(db, {
+          actorUserId: req.user!.id, actorUsername: req.user!.username, ipAddress: req.socket.remoteAddress,
+          action: 'staff.account.updated', targetType: 'user', targetId: id,
+          details: {
+            changedFields: [display_name !== undefined ? 'display_name' : null, role !== undefined ? 'role' : null,
+              is_active !== undefined ? 'is_active' : null, password ? 'password' : null].filter(Boolean).join(','),
+            role: nextRole, isActive: !!nextActive,
+          },
+        });
         if (!nextActive) {
           db.prepare("UPDATE sessions SET expires_at = datetime('now') WHERE user_id = ?").run(id);
         }
@@ -156,7 +205,7 @@ export function staffRouter(): Router {
     if (!Number.isInteger(id) || id < 1) { res.status(400).json({ error: 'Invalid staff ID' }); return; }
     if (req.user?.id === id) { res.status(409).json({ error: 'You cannot delete your own account while signed in' }); return; }
     const db = getDb();
-    const target = db.prepare('SELECT role, is_active FROM users WHERE id = ?').get(id) as { role: string; is_active: number } | undefined;
+    const target = db.prepare('SELECT username, role, is_active FROM users WHERE id = ?').get(id) as { username: string; role: string; is_active: number } | undefined;
     if (!target) { res.status(404).json({ error: 'Staff account not found' }); return; }
     const history = db.prepare('SELECT 1 FROM staff_assignments WHERE user_id = ? LIMIT 1').get(id);
     if (history) {
@@ -167,7 +216,15 @@ export function staffRouter(): Router {
       const count = db.prepare("SELECT COUNT(*) AS n FROM users WHERE role = 'admin' AND is_active = 1").get() as { n: number };
       if (count.n <= 1) { res.status(409).json({ error: 'Cannot delete the last active administrator' }); return; }
     }
-    db.prepare('DELETE FROM users WHERE id = ?').run(id);
+    const deleteStaff = db.transaction(() => {
+      writeAuditLog(db, {
+        actorUserId: req.user!.id, actorUsername: req.user!.username, ipAddress: req.socket.remoteAddress,
+        action: 'staff.account.deleted', targetType: 'user', targetId: id,
+        details: { username: target.username, role: target.role },
+      });
+      db.prepare('DELETE FROM users WHERE id = ?').run(id);
+    });
+    deleteStaff();
     broadcast('staff-updated', {});
     res.json({ status: 'ok' });
   });
