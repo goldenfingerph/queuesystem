@@ -129,6 +129,14 @@ CREATE TABLE backups (
   FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
 );
 
+-- First-run setup state. Fresh installations must be configured before staff login.
+CREATE TABLE setup_state (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  completed INTEGER NOT NULL DEFAULT 0 CHECK (completed IN (0, 1)),
+  completed_at TEXT
+);
+INSERT INTO setup_state (id, completed) VALUES (1, 0);
+
 -- Seed default admin account (password is "admin123" — bcrypt-style hash set later).
 -- Using a placeholder hash; the auth module will replace this on first login.
 INSERT INTO users (username, password_hash, display_name, role, is_active)
