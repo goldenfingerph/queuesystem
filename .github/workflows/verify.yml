@@ -219,6 +219,55 @@ jobs:
           Write-Host "Setup EXE size: $([math]::Round($setup.Length / 1MB, 1)) MB ($($setup.Length) bytes)"
           Get-FileHash -Path $setupPath -Algorithm SHA256 | Format-List Algorithm,Hash,Path
 
+      - name: Test installer upgrade preserves customer data
+        shell: pwsh
+        run: |
+          $setupPath = Join-Path $env:RUNNER_TEMP "QueueSystem-Setup.exe"
+          $packageDir = Join-Path $env:RUNNER_TEMP "QueueSystem-Windows"
+          $testDir = Join-Path $env:RUNNER_TEMP "QueueSystem-Installer-Upgrade-Test"
+          if (-not (Test-Path $setupPath)) { throw "Installer EXE missing: $setupPath" }
+          if (Test-Path $testDir) { Remove-Item -LiteralPath $testDir -Recurse -Force }
+          
+          function Invoke-QueueSystemSilentInstall {
+            & $setupPath /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- "/DIR=$testDir" /NOICONS
+            if ($LASTEXITCODE -ne 0) { throw "Silent installer exited with code $LASTEXITCODE" }
+          }
+
+          # First install into an isolated temporary folder on this disposable CI runner.
+          Invoke-QueueSystemSilentInstall
+          $appInfo = Join-Path $testDir "PACKAGE-BUILD-INFO.txt"
+          if (-not (Test-Path $appInfo)) { throw "First install did not copy application files." }
+          $expectedAppInfo = Get-Content -LiteralPath $appInfo -Raw
+
+          # Simulate customer-owned files that must survive an in-place upgrade.
+          $preservedFiles = @{
+            "server\data\infinity.db" = "CI DATABASE SENTINEL - MUST SURVIVE UPGRADE"
+            "server\data\company-settings.json" = '{"organization":"CI UPGRADE PRESERVATION TEST","theme":"purple"}'
+            "server\certs\server.key" = "CI TLS PRIVATE KEY SENTINEL - MUST SURVIVE UPGRADE"
+            "server\public\ads\customer-ad.txt" = "CI CUSTOMER AD SENTINEL - MUST SURVIVE UPGRADE"
+          }
+          foreach ($relativePath in $preservedFiles.Keys) {
+            $destination = Join-Path $testDir $relativePath
+            New-Item -ItemType Directory -Force -Path (Split-Path -Parent $destination) | Out-Null
+            Set-Content -LiteralPath $destination -Value $preservedFiles[$relativePath] -NoNewline
+          }
+
+          # Change an application-owned file to prove the second install replaces old app files.
+          Set-Content -LiteralPath $appInfo -Value "OLD APPLICATION VERSION SENTINEL" -NoNewline
+          Invoke-QueueSystemSilentInstall
+
+          foreach ($relativePath in $preservedFiles.Keys) {
+            $destination = Join-Path $testDir $relativePath
+            if (-not (Test-Path -LiteralPath $destination)) { throw "Upgrade deleted customer data: $relativePath" }
+            $actual = Get-Content -LiteralPath $destination -Raw
+            if ($actual -cne $preservedFiles[$relativePath]) { throw "Upgrade modified customer data: $relativePath" }
+          }
+          $upgradedAppInfo = Get-Content -LiteralPath $appInfo -Raw
+          if ($upgradedAppInfo -cne $expectedAppInfo) { throw "Upgrade did not replace the old application-owned file." }
+          Write-Host "PASS: database, company settings, TLS certificate, and customer ad files survived the upgrade."
+          Write-Host "PASS: application-owned files were replaced with the new package version."
+          Remove-Item -LiteralPath $testDir -Recurse -Force
+
       - name: Publish public Windows 11 release candidate assets
         if: ${{ false }}
         shell: pwsh
