@@ -2,6 +2,19 @@ import { Router } from 'express';
 import { getDb } from '../db/index.js';
 import { getConfiguredBusinessDate } from '../lib/business-date.js';
 
+function parseReportDate(value: unknown): string | null {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value ? value : null;
+}
+
+function parseReportServiceId(value: unknown): number | null {
+  if (value === undefined || value === '') return null;
+  if (typeof value !== 'string' || !/^\d+$/.test(value)) return null;
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
 export function reportsRouter(): Router {
   const router = Router();
 
@@ -131,13 +144,17 @@ export function reportsRouter(): Router {
 
   router.get('/', (req, res) => {
     const db = getDb();
-    const date = typeof req.query.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(req.query.date)
-      ? req.query.date : getConfiguredBusinessDate(db);
-    const serviceId = req.query.serviceId as string | undefined;
+    const requestedDate = req.query.date;
+    const date = requestedDate === undefined ? getConfiguredBusinessDate(db) : parseReportDate(requestedDate);
+    if (!date) return res.status(400).json({ error: 'A valid report date is required.' });
+    const serviceId = parseReportServiceId(req.query.serviceId);
+    if (req.query.serviceId !== undefined && req.query.serviceId !== '' && serviceId === null) {
+      return res.status(400).json({ error: 'Service ID must be a positive whole number.' });
+    }
 
     let where = 't.business_date = ?';
     const params: unknown[] = [date];
-    if (serviceId) { where += ' AND t.service_id = ?'; params.push(serviceId); }
+    if (serviceId !== null) { where += ' AND t.service_id = ?'; params.push(serviceId); }
 
     const summary = db.prepare(
       `SELECT
@@ -168,13 +185,17 @@ export function reportsRouter(): Router {
 
   router.get('/export', (req, res) => {
     const db = getDb();
-    const date = typeof req.query.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(req.query.date)
-      ? req.query.date : getConfiguredBusinessDate(db);
-    const serviceId = req.query.serviceId as string | undefined;
+    const requestedDate = req.query.date;
+    const date = requestedDate === undefined ? getConfiguredBusinessDate(db) : parseReportDate(requestedDate);
+    if (!date) return res.status(400).json({ error: 'A valid report date is required.' });
+    const serviceId = parseReportServiceId(req.query.serviceId);
+    if (req.query.serviceId !== undefined && req.query.serviceId !== '' && serviceId === null) {
+      return res.status(400).json({ error: 'Service ID must be a positive whole number.' });
+    }
 
     let where = 't.business_date = ?';
     const params: unknown[] = [date];
-    if (serviceId) { where += ' AND t.service_id = ?'; params.push(serviceId); }
+    if (serviceId !== null) { where += ' AND t.service_id = ?'; params.push(serviceId); }
 
     const rows = db.prepare(
       `SELECT t.number, t.status, t.priority, t.created_at, t.called_at, t.served_at, t.completed_at,
