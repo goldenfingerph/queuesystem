@@ -3,6 +3,7 @@ import { getDb } from '../db/index.js';
 import { broadcast } from '../ws/index.js';
 import { requireRole } from '../lib/middleware.js';
 import { getConfiguredBusinessDate } from '../lib/business-date.js';
+import { writeAuditLog } from '../lib/audit-log.js';
 
 export function ticketsRouter(): Router {
   const router = Router();
@@ -135,6 +136,11 @@ export function ticketsRouter(): Router {
       res.status(409).json({ error: `Ticket range exhausted (${svc.ticket_range_start}–${svc.ticket_range_end}). Ask an administrator to extend this service's range.` });
       return;
     }
+    writeAuditLog(db, {
+      actorUserId: req.user!.id, actorUsername: req.user!.username, ipAddress: req.socket.remoteAddress,
+      action: 'queue.ticket.created', targetType: 'ticket', targetId: Number(ticket.id),
+      details: { ticketNumber: ticket.number, serviceId: Number(service_id), visitorCategoryId: resolvedCategoryId },
+    });
     broadcast('ticket-created', { ticketId: ticket.id });
     broadcast('queue-updated', {});
     res.json({ status: 'ok', ticket });
@@ -220,6 +226,11 @@ export function ticketsRouter(): Router {
 
     if (!result) { res.status(404).json({ error: 'No waiting tickets' }); return; }
     const calledTicket = 'ticket' in result ? result.ticket : result;
+    writeAuditLog(db, {
+      actorUserId: req.user!.id, actorUsername: req.user!.username, ipAddress: req.socket.remoteAddress,
+      action: 'queue.ticket.called', targetType: 'ticket', targetId: calledTicket.id,
+      details: { counterId: Number(counter_id), ticketNumber: calledTicket.number },
+    });
     broadcast('ticket-called', { ticketId: calledTicket.id, counterId: counter_id });
     broadcast('queue-updated', {});
     res.json({ status: 'ok', ticket: calledTicket });
@@ -238,6 +249,11 @@ export function ticketsRouter(): Router {
     db.prepare(
       "INSERT INTO queue_events (ticket_id, event_type, counter_id, user_id, from_status, to_status) VALUES (?, 'recalled', ?, ?, 'called', 'called')",
     ).run(ticket_id, ticket.counter_id, user_id ?? null);
+    writeAuditLog(db, {
+      actorUserId: req.user!.id, actorUsername: req.user!.username, ipAddress: req.socket.remoteAddress,
+      action: 'queue.ticket.recalled', targetType: 'ticket', targetId: ticket.id,
+      details: { counterId: ticket.counter_id },
+    });
     broadcast('ticket-recalled', { ticketId: ticket_id, counterId: ticket.counter_id });
     broadcast('queue-updated', {});
     res.json({ status: 'ok' });
@@ -263,6 +279,11 @@ export function ticketsRouter(): Router {
       return true;
     })();
     if (!changed) { res.status(409).json({ error: 'Ticket state changed; refresh and try again' }); return; }
+    writeAuditLog(db, {
+      actorUserId: req.user!.id, actorUsername: req.user!.username, ipAddress: req.socket.remoteAddress,
+      action: 'queue.ticket.started', targetType: 'ticket', targetId: ticket.id,
+      details: { counterId: ticket.counter_id },
+    });
     broadcast('queue-updated', {});
     res.json({ status: 'ok' });
   });
@@ -287,6 +308,11 @@ export function ticketsRouter(): Router {
       return true;
     })();
     if (!changed) { res.status(409).json({ error: 'Ticket state changed; refresh and try again' }); return; }
+    writeAuditLog(db, {
+      actorUserId: req.user!.id, actorUsername: req.user!.username, ipAddress: req.socket.remoteAddress,
+      action: 'queue.ticket.completed', targetType: 'ticket', targetId: ticket.id,
+      details: { counterId: ticket.counter_id },
+    });
     broadcast('ticket-completed', { ticketId: ticket_id, counterId: ticket.counter_id });
     broadcast('queue-updated', {});
     res.json({ status: 'ok' });
@@ -311,6 +337,11 @@ export function ticketsRouter(): Router {
       return true;
     })();
     if (!changed) { res.status(409).json({ error: 'Ticket state changed; refresh and try again' }); return; }
+    writeAuditLog(db, {
+      actorUserId: req.user!.id, actorUsername: req.user!.username, ipAddress: req.socket.remoteAddress,
+      action: 'queue.ticket.no_show', targetType: 'ticket', targetId: ticket.id,
+      details: { counterId: ticket.counter_id },
+    });
     broadcast('queue-updated', {});
     res.json({ status: 'ok' });
   });
@@ -365,6 +396,11 @@ export function ticketsRouter(): Router {
       return { ticketId: ticket.id, number: String((db.prepare('SELECT number FROM tickets WHERE id = ?').get(ticket_id) as { number: string }).number) };
     }).immediate();
 
+    writeAuditLog(db, {
+      actorUserId: req.user!.id, actorUsername: req.user!.username, ipAddress: req.socket.remoteAddress,
+      action: 'queue.ticket.transferred', targetType: 'ticket', targetId: ticket.id,
+      details: { fromServiceId: ticket.service_id, toServiceId: Number(to_service_id), toCounterId: Number(to_counter_id), previousStatus: ticket.status },
+    });
     broadcast('ticket-transferred', { ticketId: ticket_id, newTicketId: ticket_id, counterId: to_counter_id });
     broadcast('queue-updated', {});
     res.json({ status: 'ok', ...result });
