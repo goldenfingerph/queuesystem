@@ -1,13 +1,13 @@
 import { Router } from 'express';
 import { getDb } from '../db/index.js';
-import { getBusinessDate } from '../../shared/business-date.js';
+import { getConfiguredBusinessDate } from '../lib/business-date.js';
 
 export function reportsRouter(): Router {
   const router = Router();
 
   router.get('/dashboard', (_req, res) => {
     const db = getDb();
-    const today = getBusinessDate();
+    const today = getConfiguredBusinessDate(db);
 
     const totals = db.prepare(
       `SELECT
@@ -110,7 +110,7 @@ export function reportsRouter(): Router {
   router.get('/', (req, res) => {
     const db = getDb();
     const date = typeof req.query.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(req.query.date)
-      ? req.query.date : getBusinessDate();
+      ? req.query.date : getConfiguredBusinessDate(db);
     const serviceId = req.query.serviceId as string | undefined;
 
     let where = 't.business_date = ?';
@@ -147,7 +147,7 @@ export function reportsRouter(): Router {
   router.get('/export', (req, res) => {
     const db = getDb();
     const date = typeof req.query.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(req.query.date)
-      ? req.query.date : getBusinessDate();
+      ? req.query.date : getConfiguredBusinessDate(db);
     const serviceId = req.query.serviceId as string | undefined;
 
     let where = 't.business_date = ?';
