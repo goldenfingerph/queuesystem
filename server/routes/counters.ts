@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { getDb } from '../db/index.js';
 import { broadcast } from '../ws/index.js';
 import { requireRole } from '../lib/middleware.js';
+import { writeAuditLog } from '../lib/audit-log.js';
 
 export function countersRouter(): Router {
   const router = Router();
@@ -33,6 +34,11 @@ export function countersRouter(): Router {
     const db = getDb();
     try {
       const info = db.prepare('INSERT INTO counters (number, name) VALUES (?, ?)').run(Number(number), name.trim());
+      writeAuditLog(db, {
+        actorUserId: req.user!.id, actorUsername: req.user!.username, ipAddress: req.socket.remoteAddress,
+        action: 'counter.created', targetType: 'counter', targetId: Number(info.lastInsertRowid),
+        details: { number: Number(number), name: name.trim() },
+      });
       broadcast('counters-updated', {});
       res.json({ status: 'ok', id: info.lastInsertRowid });
     } catch (err) {
@@ -85,6 +91,12 @@ export function countersRouter(): Router {
         res.status(409).json({ error: 'Cannot disable a counter while staff are assigned, a ticket is being served, or a transferred ticket is waiting for it. End the assignment or move the waiting ticket first.' });
         return;
       }
+      writeAuditLog(db, {
+        actorUserId: req.user!.id, actorUsername: req.user!.username, ipAddress: req.socket.remoteAddress,
+        action: 'counter.updated', targetType: 'counter', targetId: Number(id),
+        details: { changedFields: [number !== undefined ? 'number' : null, name !== undefined ? 'name' : null,
+          is_active !== undefined ? 'is_active' : null].filter(Boolean).join(',') },
+      });
       broadcast('counters-updated', {});
       res.json({ status: 'ok' });
     } catch (err) {
@@ -111,6 +123,12 @@ export function countersRouter(): Router {
       return 'ok';
     });
     const outcome = deleteCounter.immediate();
+    if (outcome === 'ok') {
+      writeAuditLog(db, {
+        actorUserId: req.user!.id, actorUsername: req.user!.username, ipAddress: req.socket.remoteAddress,
+        action: 'counter.deleted', targetType: 'counter', targetId: Number(id),
+      });
+    }
     if (outcome === 'not-found') { res.status(404).json({ error: 'Counter not found' }); return; }
     if (outcome === 'has-history') {
       res.status(409).json({ error: 'Cannot delete a counter with ticket or staff history, including transferred tickets waiting for it. Disable it instead.' });
@@ -137,7 +155,14 @@ export function countersRouter(): Router {
       const stmt = db.prepare('INSERT INTO counter_services (counter_id, service_id) VALUES (?, ?)');
       for (const sid of serviceIds) stmt.run(id, sid);
     });
-    try { tx(); } catch (err) {
+    try {
+      tx();
+      writeAuditLog(db, {
+        actorUserId: req.user!.id, actorUsername: req.user!.username, ipAddress: req.socket.remoteAddress,
+        action: 'counter.services.updated', targetType: 'counter', targetId: Number(id),
+        details: { serviceIds: serviceIds.map(Number).join(',') },
+      });
+    } catch (err) {
       res.status(409).json({ error: err instanceof Error ? err.message : 'Could not update counter services' });
       return;
     }
