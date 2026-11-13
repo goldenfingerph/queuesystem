@@ -14,6 +14,8 @@ import { CounterDeskModule } from '@/modules/CounterDeskModule';
 import { TvDisplayModule } from '@/modules/TvDisplayModule';
 import { ReportsModule } from '@/modules/ReportsModule';
 import { SystemSettingsModule } from '@/modules/SystemSettingsModule';
+import { SetupWizard } from '@/modules/SetupWizard';
+import { api } from '@/lib/api';
 
 function getRoute(): string {
   const hash = window.location.hash.replace(/^#\/?/, '');
@@ -34,6 +36,15 @@ function useRoute(): [string, (r: string) => void] {
 function Router() {
   const { user, loading } = useAuth();
   const [route] = useRoute();
+  const [setupState, setSetupState] = useState<'loading' | 'required' | 'complete' | 'error'>('loading');
+
+  useEffect(() => {
+    let active = true;
+    api.get<{ required: boolean }>('/setup/status')
+      .then((result) => { if (active) setSetupState(result.required ? 'required' : 'complete'); })
+      .catch(() => { if (active) setSetupState('error'); });
+    return () => { active = false; };
+  }, []);
 
   if (loading) {
     return (
@@ -43,10 +54,18 @@ function Router() {
     );
   }
 
-  // TV display is a public route — no auth required (for TV browser)
+  // TV display remains public so the public screen can load independently.
   if (route === 'tv-display' || route === 'tv') {
     return <TvDisplayModule />;
   }
+
+  if (setupState === 'loading') {
+    return <div className="flex min-h-screen items-center justify-center bg-navy-950"><Loader2 className="h-8 w-8 animate-spin text-brand-400" /></div>;
+  }
+  if (setupState === 'error') {
+    return <div className="flex min-h-screen items-center justify-center bg-navy-950 px-4 text-center text-white"><div><h1 className="text-xl font-bold">Unable to check system setup</h1><p className="mt-2 text-sm text-slate-300">Please confirm the QueueSystem server is running, then refresh this page.</p><button className="btn-primary mt-5" onClick={() => window.location.reload()}>Retry</button></div></div>;
+  }
+  if (setupState === 'required') return <SetupWizard />;
 
   if (!user) {
     return <LoginPage />;
