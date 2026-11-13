@@ -6,7 +6,7 @@ export function SetupWizard() {
   const [organizationNameEn, setOrganizationNameEn] = useState('');
   const [organizationNameAr, setOrganizationNameAr] = useState('');
   const [language, setLanguage] = useState('en');
-  const [businessTimezone, setBusinessTimezone] = useState('Asia/Dubai');
+  const [businessTimezone, setBusinessTimezone] = useState(() => Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Dubai');
   const [businessDayStart, setBusinessDayStart] = useState('06:00');
   const [username, setUsername] = useState('admin');
   const [displayName, setDisplayName] = useState('System Administrator');
