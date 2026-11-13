@@ -229,8 +229,18 @@ jobs:
           if (Test-Path $testDir) { Remove-Item -LiteralPath $testDir -Recurse -Force }
           
           function Invoke-QueueSystemSilentInstall {
-            & $setupPath /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- "/DIR=$testDir" /NOICONS
-            if ($LASTEXITCODE -ne 0) { throw "Silent installer exited with code $LASTEXITCODE" }
+            $arguments = @(
+              "/VERYSILENT",
+              "/SUPPRESSMSGBOXES",
+              "/NORESTART",
+              "/SP-",
+              "/DIR=$testDir",
+              "/NOICONS"
+            )
+            $process = Start-Process -FilePath $setupPath -ArgumentList $arguments -Wait -PassThru
+            if ($process.ExitCode -ne 0) {
+              throw "Silent installer exited with code $($process.ExitCode)"
+            }
           }
 
           # First install into an isolated temporary folder on this disposable CI runner.
