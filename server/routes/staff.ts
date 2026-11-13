@@ -69,7 +69,7 @@ export function staffRouter(): Router {
       const info = db.prepare("INSERT INTO staff_assignments (user_id, counter_id, status) VALUES (?, ?, 'active')").run(user_id, counter_id);
       writeAuditLog(db, {
         actorUserId: req.user!.id, actorUsername: req.user!.username, ipAddress: req.socket.remoteAddress,
-        action: 'staff.assignment.created', targetType: 'staff_assignment', targetId: info.lastInsertRowid,
+        action: 'staff.assignment.created', targetType: 'staff_assignment', targetId: Number(info.lastInsertRowid),
         details: { staffUserId: Number(user_id), counterId: Number(counter_id) },
       });
       return info.lastInsertRowid;
@@ -128,7 +128,7 @@ export function staffRouter(): Router {
         .run(username, hashPassword(password), display_name.trim(), role);
       writeAuditLog(db, {
         actorUserId: req.user!.id, actorUsername: req.user!.username, ipAddress: req.socket.remoteAddress,
-        action: 'staff.account.created', targetType: 'user', targetId: created.lastInsertRowid,
+        action: 'staff.account.created', targetType: 'user', targetId: Number(created.lastInsertRowid),
         details: { username, displayName: display_name.trim(), role },
       });
       broadcast('staff-updated', {});
