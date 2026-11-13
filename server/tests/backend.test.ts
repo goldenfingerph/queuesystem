@@ -429,6 +429,13 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
     const admin = db.prepare("SELECT id FROM users WHERE username = 'admin'").get() as { id: number };
     const adminToken = middleware.createSession(admin.id);
 
+    const settingsAuditResponse = await fetch(`http://127.0.0.1:${address.port}/api/settings`, {
+      method: 'PUT',
+      headers: { authorization: `Bearer ${adminToken}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ settings: { ticket_padding: 4 } }),
+    });
+    assert.equal(settingsAuditResponse.status, 200, await settingsAuditResponse.text());
+
     // Service-management API and database regression coverage.
     const serviceHeaders = {
       authorization: `Bearer ${adminToken}`,
@@ -718,6 +725,10 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
       'staff account changes must be visible in the admin activity history');
     assert.ok(auditLogsData.logs.some((log) => log.action === 'auth.login.succeeded'),
       'successful sign-ins must be visible in the admin activity history');
+    assert.ok(auditLogsData.logs.some((log) => log.action === 'queue.ticket.transferred' && log.actor_username === 'counter-officer'),
+      'ticket transfers must be visible with the acting staff member');
+    assert.ok(auditLogsData.logs.some((log) => log.action === 'settings.updated' && log.actor_username === 'admin'),
+      'system settings changes must be visible in the admin activity history');
     assert.equal(auditLogsData.logs.some((log) => JSON.stringify(log).includes(firstRunPassword)), false,
       'audit history must never expose passwords');
 
