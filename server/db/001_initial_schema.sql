@@ -1,4 +1,4 @@
--- v1: initial schema for INFINITY SERVICES – Queue Management System
+-- v1: initial schema for QueueSystem – Queue Management System
 -- All timestamps stored as ISO text for portability.
 
 -- Staff login accounts
