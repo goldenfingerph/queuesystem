@@ -10,11 +10,11 @@ export function LoginPage() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
-  const [orgNameEn, setOrgNameEn] = useState('INFINITY SERVICES');
+  const [orgNameEn, setOrgNameEn] = useState('QueueSystem');
 
   useEffect(() => {
     api.get<{ logoUrl: string | null }>('/logo').then((r) => setLogoUrl(r.logoUrl ? r.logoUrl + '?v=' + Date.now() : null)).catch(() => {});
-    api.get<{ settings: Record<string, string> }>('/settings').then((r) => setOrgNameEn(r.settings.org_name_en?.trim() || 'INFINITY SERVICES')).catch(() => {});
+    api.get<{ settings: Record<string, string> }>('/settings').then((r) => setOrgNameEn(r.settings.org_name_en?.trim() || 'QueueSystem')).catch(() => {});
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
