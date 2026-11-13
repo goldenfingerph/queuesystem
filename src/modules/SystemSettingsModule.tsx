@@ -45,7 +45,7 @@ export function SystemSettingsModule() {
     if (!orgNameEn || orgNameEn.length > 100 || !orgNameAr || orgNameAr.length > 100) { setSavedMsg('Organization names are required and must be 100 characters or fewer.'); return; }
     if (!Number.isInteger(interval) || interval < 5 || interval > 360) { setSavedMsg('Advertisement interval must be a whole number from 5 to 360 seconds.'); return; }
     if (!Number.isInteger(recentCalls) || recentCalls < 1 || recentCalls > 20) { setSavedMsg('TV recent calls count must be a whole number from 1 to 20.'); return; }
-    if (!businessTimezone || businessTimezone.length > 80 || !/^(?:[01]\\d|2[0-3]):[0-5]\\d$/.test(businessDayStart)) { setSavedMsg('Enter a valid IANA timezone and business-day start time.'); return; }
+    if (!businessTimezone || businessTimezone.length > 80 || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(businessDayStart)) { setSavedMsg('Enter a valid IANA timezone and business-day start time.'); return; }
     setSaving(true);
     setSavedMsg('');
     try {
