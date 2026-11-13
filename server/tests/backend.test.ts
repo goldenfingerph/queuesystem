@@ -352,6 +352,45 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
     assert.equal(ticket.queued_for_counter_id, targetCounter);
     assert.equal(ticket.transfer_priority, 1);
 
+    const setupStatusBefore = await fetch(`http://127.0.0.1:${address.port}/api/setup/status`);
+    assert.equal(setupStatusBefore.status, 200);
+    assert.deepEqual(await setupStatusBefore.json(), { required: true }, 'fresh installs must require the one-time setup wizard');
+
+    const setupResponse = await fetch(`http://127.0.0.1:${address.port}/api/setup/complete`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        organizationNameEn: 'Test Organization',
+        organizationNameAr: 'مؤسسة الاختبار',
+        username: 'admin',
+        displayName: 'Test Administrator',
+        password: firstRunPassword,
+        language: 'both',
+      }),
+    });
+    assert.equal(setupResponse.status, 201, await setupResponse.clone().text());
+    const setupResult = await setupResponse.json() as { token: string; user: { username: string; display_name: string; role: string } };
+    assert.equal(setupResult.user.username, 'admin');
+    assert.equal(setupResult.user.display_name, 'Test Administrator');
+    assert.equal(setupResult.user.role, 'admin');
+    assert.ok(setupResult.token.length > 20, 'setup completion must create an authenticated admin session');
+
+    const setupStatusAfter = await fetch(`http://127.0.0.1:${address.port}/api/setup/status`);
+    assert.deepEqual(await setupStatusAfter.json(), { required: false }, 'completed setup must never be shown again');
+    const duplicateSetup = await fetch(`http://127.0.0.1:${address.port}/api/setup/complete`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        organizationNameEn: 'Another Organization',
+        organizationNameAr: 'مؤسسة أخرى',
+        username: 'admin',
+        displayName: 'Another Administrator',
+        password: firstRunPassword,
+        language: 'en',
+      }),
+    });
+    assert.equal(duplicateSetup.status, 409, 'the setup endpoint must reject a second completion');
+
     const firstRunLogin = await fetch(`http://127.0.0.1:${address.port}/api/auth/login`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
