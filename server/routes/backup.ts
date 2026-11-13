@@ -15,7 +15,7 @@ export function backupRouter(): Router {
     try {
       fs.mkdirSync(config.backupsDir, { recursive: true });
       const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const filename = `infinity-backup-${stamp}.db`;
+      const filename = `queuesystem-backup-${stamp}.db`;
       dest = path.join(config.backupsDir, filename);
       const db = getDb();
       await db.backup(dest);
@@ -48,7 +48,7 @@ export function backupRouter(): Router {
     const id = Number(req.params.id);
     if (!Number.isInteger(id) || id < 1) { res.status(400).json({ error: 'Invalid backup ID' }); return; }
     const row = getDb().prepare('SELECT filename FROM backups WHERE id = ?').get(id) as { filename: string } | undefined;
-    if (!row || path.basename(row.filename) !== row.filename || !/^infinity-backup-[\dTZ-]+\.db$/.test(row.filename)) {
+    if (!row || path.basename(row.filename) !== row.filename || !/^(?:queuesystem|infinity)-backup-[\dTZ-]+\.db$/.test(row.filename)) {
       res.status(404).json({ error: 'Backup not found' }); return;
     }
     const file = path.resolve(config.backupsDir, row.filename);
