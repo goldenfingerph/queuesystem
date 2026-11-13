@@ -12,16 +12,21 @@ export function setupRouter(): Router {
   });
 
   router.post('/complete', (req, res) => {
-    const { organizationNameEn, organizationNameAr, username, displayName, password, language } = req.body ?? {};
+    const { organizationNameEn, organizationNameAr, username, displayName, password, language, businessTimezone, businessDayStart } = req.body ?? {};
     const validText = (value: unknown, max: number) => typeof value === 'string' && value.trim().length > 0 && value.length <= max;
     if (!validText(organizationNameEn, 100) || !validText(organizationNameAr, 100) ||
         !validText(displayName, 80) || typeof username !== 'string' ||
         !/^[a-zA-Z0-9._-]{3,32}$/.test(username) ||
         typeof password !== 'string' || password.length < 12 || password.length > 200 ||
-        !['en', 'ar', 'both'].includes(language)) {
-      res.status(400).json({ error: 'Please provide valid company names, admin details, a 12–200 character password, and a supported language.' });
+        !['en', 'ar', 'both'].includes(language) ||
+        typeof businessTimezone !== 'string' || businessTimezone.length > 80 ||
+        typeof businessDayStart !== 'string' || !/^([01]\\d|2[0-3]):[0-5]\\d$/.test(businessDayStart)) {
+      res.status(400).json({ error: 'Please provide valid company names, admin details, a 12–200 character password, language, timezone, and business-day start.' });
       return;
     }
+
+    try { new Intl.DateTimeFormat('en-US', { timeZone: businessTimezone }); }
+    catch { res.status(400).json({ error: 'Please provide a valid IANA timezone.' }); return; }
 
     const db = getDb();
     const state = db.prepare('SELECT completed FROM setup_state WHERE id = 1').get() as { completed: number } | undefined;
@@ -47,6 +52,8 @@ export function setupRouter(): Router {
       setting.run('org_name_en', organizationNameEn.trim());
       setting.run('org_name_ar', organizationNameAr.trim());
       setting.run('language', language);
+      setting.run('business_timezone', businessTimezone);
+      setting.run('business_day_start', businessDayStart);
       db.prepare("UPDATE setup_state SET completed = 1, completed_at = datetime('now') WHERE id = 1 AND completed = 0").run();
     });
     try {
