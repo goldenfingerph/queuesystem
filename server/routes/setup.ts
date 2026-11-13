@@ -20,7 +20,7 @@ export function setupRouter(): Router {
         typeof password !== 'string' || password.length < 12 || password.length > 200 ||
         !['en', 'ar', 'both'].includes(language) ||
         typeof businessTimezone !== 'string' || businessTimezone.length > 80 ||
-        typeof businessDayStart !== 'string' || !/^([01]\\d|2[0-3]):[0-5]\\d$/.test(businessDayStart)) {
+        typeof businessDayStart !== 'string' || !/^([01]\d|2[0-3]):[0-5]\d$/.test(businessDayStart)) {
       res.status(400).json({ error: 'Please provide valid company names, admin details, a 12–200 character password, language, timezone, and business-day start.' });
       return;
     }
