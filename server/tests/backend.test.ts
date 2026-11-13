@@ -381,6 +381,12 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
     assert.equal(setupResult.user.display_name, 'Test Administrator');
     assert.equal(setupResult.user.role, 'admin');
     assert.ok(setupResult.token.length > 20, 'setup completion must create an authenticated admin session');
+    const configuredAdmin = db.prepare('SELECT username, password_hash, is_active FROM users WHERE id = ?')
+      .get(setupResult.user.id) as { username: string; password_hash: string; is_active: number };
+    assert.equal(configuredAdmin.username, setupResult.user.username, 'setup must persist the selected admin username');
+    assert.equal(configuredAdmin.is_active, 1, 'setup must leave the initial administrator active');
+    assert.equal(auth.verifyPassword(firstRunPassword, configuredAdmin.password_hash), true,
+      'setup must persist a password hash that the login verifier accepts');
 
     const setupStatusAfter = await fetch(`http://127.0.0.1:${address.port}/api/setup/status`);
     assert.deepEqual(await setupStatusAfter.json(), { required: false }, 'completed setup must never be shown again');
