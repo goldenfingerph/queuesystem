@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { getDb } from '../db/index.js';
 import { hashPassword, hashToken, verifyPassword } from '../lib/auth.js';
 import { authMiddleware, createSession, destroySession, type AuthUser } from '../lib/middleware.js';
+import { writeAuditLog } from '../lib/audit-log.js';
 
 type LoginAttempt = { count: number; windowStarted: number; blockedUntil: number };
 
@@ -86,6 +87,10 @@ export function authRouter(): Router {
 
     failedLogins.delete(key);
     const token = createSession(user.id);
+    writeAuditLog(db, {
+      actorUserId: user.id, actorUsername: user.username, ipAddress: req.socket.remoteAddress,
+      action: 'auth.login.succeeded', targetType: 'user', targetId: user.id,
+    });
     const authUser: AuthUser = {
       id: user.id, username: user.username, display_name: user.display_name, role: user.role,
     };
@@ -94,6 +99,11 @@ export function authRouter(): Router {
 
   router.post('/logout', authMiddleware, (req, res) => {
     const token = req.headers.authorization!.slice(7);
+    const db = getDb();
+    writeAuditLog(db, {
+      actorUserId: req.user!.id, actorUsername: req.user!.username, ipAddress: req.socket.remoteAddress,
+      action: 'auth.logout', targetType: 'user', targetId: req.user!.id,
+    });
     destroySession(token);
     res.json({ status: 'ok' });
   });
@@ -125,6 +135,10 @@ export function authRouter(): Router {
       // Keep this device signed in, but expire every other session for the account.
       db.prepare("UPDATE sessions SET expires_at = datetime('now') WHERE user_id = ? AND token <> ?")
         .run(req.user!.id, hashToken(currentToken));
+      writeAuditLog(db, {
+        actorUserId: req.user!.id, actorUsername: req.user!.username, ipAddress: req.socket.remoteAddress,
+        action: 'auth.password.changed', targetType: 'user', targetId: req.user!.id,
+      });
     });
     updatePassword();
     res.json({ status: 'ok' });
