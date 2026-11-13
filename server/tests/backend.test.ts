@@ -274,8 +274,8 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
     assert.deepEqual(analytics.daily, [{ date: '2026-11-08', total: 3, completed: 2, skipped: 0 }]);
     assert.equal(analytics.byService[0]?.serviceId, sourceService);
     assert.equal(analytics.byService[0]?.total, 3);
-    assert.ok(analytics.hourly.some((bucket) => bucket.hour === 8 && bucket.total === 1));
-    assert.ok(analytics.hourly.some((bucket) => bucket.hour === 9 && bucket.total === 1), `Unexpected hourly analytics buckets: ${JSON.stringify(analytics.hourly)}`);
+    assert.ok(analytics.hourly.some((bucket) => bucket.hour === 12 && bucket.total === 1), 'Hourly arrivals must use the configured Asia/Dubai timezone');
+    assert.ok(analytics.hourly.some((bucket) => bucket.hour === 13 && bucket.total === 1), `Unexpected company-local hourly analytics buckets: ${JSON.stringify(analytics.hourly)}`);
 
     const reversedAnalyticsRange = await fetch(`http://127.0.0.1:${address.port}/api/reports/analytics?from=2026-11-09&to=2026-11-08`, {
       headers: { authorization: `Bearer ${token}` },
