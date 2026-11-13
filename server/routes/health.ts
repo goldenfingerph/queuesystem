@@ -11,7 +11,7 @@ export function healthRouter(): Router {
       const row = db.prepare('SELECT COUNT(*) AS n FROM sqlite_master').get() as { n: number };
       res.json({
         status: 'ok',
-        service: 'INFINITY SERVICES — Queue Management System',
+        service: 'QueueSystem — Queue Management System',
         database: 'connected',
         tables: row.n,
         timestamp: new Date().toISOString(),
