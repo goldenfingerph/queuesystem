@@ -88,12 +88,34 @@ export function reportsRouter(): Router {
        GROUP BY s.id HAVING COUNT(t.id) > 0 ORDER BY total DESC, s.name`,
     ).all(...params);
 
-    const hourly = db.prepare(
-      `SELECT CAST(strftime('%H', t.created_at) AS INTEGER) AS hour, COUNT(*) AS total
+    const timezoneRow = db.prepare(
+      "SELECT value FROM system_settings WHERE key = 'business_timezone'",
+    ).get() as { value: string } | undefined;
+    const businessTimezone = timezoneRow?.value || 'Asia/Dubai';
+    const hourFormatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: businessTimezone,
+      hour: '2-digit',
+      hourCycle: 'h23',
+    });
+    const hourlyRows = db.prepare(
+      `SELECT t.created_at
        FROM tickets t
-       WHERE t.business_date BETWEEN ? AND ?${serviceFilter}
-       GROUP BY strftime('%H', t.created_at) ORDER BY hour`,
-    ).all(...params);
+       WHERE t.business_date BETWEEN ? AND ?${serviceFilter}`,
+    ).all(...params) as { created_at: string }[];
+    const hourlyCounts = new Map<number, number>();
+    for (const row of hourlyRows) {
+      // SQLite stores timestamps as UTC without a suffix; parse them explicitly
+      // as UTC, then bucket using the company's configured IANA timezone.
+      const timestamp = new Date(`${row.created_at.replace(' ', 'T')}Z`);
+      if (Number.isNaN(timestamp.getTime())) continue;
+      const hour = Number(hourFormatter.formatToParts(timestamp).find((part) => part.type === 'hour')?.value);
+      if (Number.isInteger(hour) && hour >= 0 && hour <= 23) {
+        hourlyCounts.set(hour, (hourlyCounts.get(hour) ?? 0) + 1);
+      }
+    }
+    const hourly = [...hourlyCounts.entries()]
+      .sort(([hourA], [hourB]) => hourA - hourB)
+      .map(([hour, total]) => ({ hour, total }));
 
     const totals = db.prepare(
       `SELECT COUNT(*) AS total,
