@@ -69,6 +69,7 @@ jobs:
       - name: Lint frontend and backend
         run: npm run lint
       - name: Package Windows 11 project bundle
+        if: vars.BUILD_WINDOWS_INSTALLER == 'true'
         shell: pwsh
         run: |
           $packageDir = Join-Path $env:RUNNER_TEMP "QueueSystem-Windows"
@@ -202,10 +203,12 @@ jobs:
           Get-FileHash -Path $zipPath -Algorithm SHA256 | Format-List Algorithm,Hash,Path
 
       - name: Install Inno Setup
+        if: vars.BUILD_WINDOWS_INSTALLER == 'true'
         shell: pwsh
         run: choco install innosetup --no-progress -y
 
       - name: Build Windows Setup Wizard
+        if: vars.BUILD_WINDOWS_INSTALLER == 'true'
         shell: pwsh
         run: |
           $packageDir = Join-Path $env:RUNNER_TEMP "QueueSystem-Windows"
@@ -220,6 +223,7 @@ jobs:
           Get-FileHash -Path $setupPath -Algorithm SHA256 | Format-List Algorithm,Hash,Path
 
       - name: Publish public Windows 11 release candidate assets
+        if: vars.BUILD_WINDOWS_INSTALLER == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/stable/windows11-release-candidate'
         if: github.event_name == 'push' && github.ref == 'refs/heads/stable/windows11-release-candidate'
         shell: pwsh
         env:
@@ -236,6 +240,7 @@ jobs:
             --prerelease
 
       - name: Stage final release files
+        if: vars.BUILD_WINDOWS_INSTALLER == 'true'
         shell: pwsh
         run: |
           $releaseDir = Join-Path $env:RUNNER_TEMP "QueueSystem-Windows11-Release"
@@ -252,6 +257,7 @@ jobs:
           "@ | Set-Content (Join-Path $releaseDir "README-FIRST.txt") -Encoding UTF8
 
       - name: Upload Windows 11 release bundle
+        if: vars.BUILD_WINDOWS_INSTALLER == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: QueueSystem-Windows11-Release
