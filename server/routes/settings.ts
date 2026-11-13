@@ -62,7 +62,7 @@ export function settingsRouter(): Router {
       try { new Intl.DateTimeFormat('en-US', { timeZone: settings.business_timezone }); }
       catch { res.status(400).json({ error: 'business_timezone must be a valid IANA timezone' }); return; }
     }
-    if (settings.business_day_start !== undefined && (typeof settings.business_day_start !== 'string' || !/^([01]\\d|2[0-3]):[0-5]\\d$/.test(settings.business_day_start))) {
+    if (settings.business_day_start !== undefined && (typeof settings.business_day_start !== 'string' || !/^([01]\d|2[0-3]):[0-5]\d$/.test(settings.business_day_start))) {
       res.status(400).json({ error: 'business_day_start must use HH:mm format' }); return;
     }
     const db = getDb();
