@@ -66,7 +66,7 @@ async function start(): Promise<void> {
 
   server.listen(config.port, config.host, () => {
     console.log('=================================================');
-    console.log('  INFINITY SERVICES — Queue Management System');
+    console.log('  QueueSystem — Queue Management System');
     console.log('=================================================');
     console.log(`  Local:  ${protocol}://localhost:${config.port}`);
     console.log(`  LAN:    ${protocol}://<server-ip>:${config.port}`);
