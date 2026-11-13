@@ -47,8 +47,8 @@ ALTER TABLE tickets ADD COLUMN priority_rank INTEGER NOT NULL DEFAULT 99;
 -- Update seed settings for bilingual support and display config
 INSERT INTO system_settings (key, value) VALUES
   ('language', 'en'),
-  ('org_name_en', 'INFINITY SERVICES'),
-  ('org_name_ar', 'إنفينيتي سيرفيس'),
+  ('org_name_en', 'Your Organization'),
+  ('org_name_ar', 'اسم المؤسسة'),
   ('tv_recent_calls', '6'),
   ('voice_enabled', '1'),
   ('bell_enabled', '1'),
