@@ -105,7 +105,7 @@ export function SystemSettingsModule() {
   };
 
   const removeLogo = async () => {
-    if (!confirm('Remove the uploaded logo and restore the default Infinity Services icon?')) return;
+    if (!confirm('Remove the uploaded logo and restore the default QueueSystem icon?')) return;
     try {
       await api.del('/logo');
       setLogoUrl(null);
@@ -260,7 +260,7 @@ export function SystemSettingsModule() {
           <p className="mb-4 text-sm text-navy-400">Upload one logo for the login screen, sidebar, and TV display. The image is automatically fitted without stretching or cropping.</p>
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
             <div className="flex h-36 w-56 items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50 p-3">
-              {logoUrl ? <img src={logoUrl} alt="Organization logo preview" className="max-h-full max-w-full object-contain" /> : <div className="text-center text-sm text-navy-400"><SettingsIcon className="mx-auto mb-2 h-8 w-8" />Default Infinity Services icon</div>}
+              {logoUrl ? <img src={logoUrl} alt="Organization logo preview" className="max-h-full max-w-full object-contain" /> : <div className="text-center text-sm text-navy-400"><SettingsIcon className="mx-auto mb-2 h-8 w-8" />Default QueueSystem icon</div>}
             </div>
             <div className="flex flex-wrap gap-2">
               <label className="btn-primary cursor-pointer">
