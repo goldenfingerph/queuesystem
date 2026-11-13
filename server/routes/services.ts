@@ -48,7 +48,7 @@ export function servicesRouter(): Router {
     const id = Number(req.params.id);
     try {
       updateService(id, req.body ?? {});
-      writeAuditLog((await import('../db/index.js')).getDb(), {
+      writeAuditLog(getDb(), {
         actorUserId: req.user!.id, actorUsername: req.user!.username, ipAddress: req.socket.remoteAddress,
         action: 'service.updated', targetType: 'service', targetId: id,
         details: { changedFields: Object.keys(req.body ?? {}).sort().join(',') },
@@ -64,7 +64,7 @@ export function servicesRouter(): Router {
     const id = Number(req.params.id);
     try {
       deleteService(id);
-      writeAuditLog((await import('../db/index.js')).getDb(), {
+      writeAuditLog(getDb(), {
         actorUserId: req.user!.id, actorUsername: req.user!.username, ipAddress: req.socket.remoteAddress,
         action: 'service.deleted', targetType: 'service', targetId: id,
       });
