@@ -39,6 +39,30 @@ export function TvDisplayModule() {
   const arabicAudioPromisesRef = useRef<Map<string, Promise<AudioBuffer>>>(new Map());
   const arabicSourceRef = useRef<AudioBufferSourceNode | null>(null);
 
+  // The kiosk browser is launched with autoplay-policy=no-user-gesture-required.
+  // Resume audio automatically so the first ticket call can use the bell and Arabic recordings
+  // without requiring the operator to click the speaker icon after every server start.
+  useEffect(() => {
+    if (!voiceEnabled || typeof AudioContext === 'undefined') return;
+    let cancelled = false;
+    try {
+      const context = audioContextRef.current ?? new AudioContext();
+      audioContextRef.current = context;
+      if (context.state !== 'running') {
+        void context.resume().then(() => {
+          if (!cancelled && context.state === 'running') setAudioUnlocked(true);
+        }).catch((error) => {
+          console.warn('[TV] Automatic audio startup was blocked by the browser. Launch the TV using the QueueSystem kiosk shortcut.', error);
+        });
+      } else {
+        setAudioUnlocked(true);
+      }
+    } catch (error) {
+      console.warn('[TV] Unable to initialize automatic audio startup:', error);
+    }
+    return () => { cancelled = true; };
+  }, [voiceEnabled]);
+
   // Load initial state
   useEffect(() => {
     api.get<{ logoUrl: string | null }>('/logo').then((r) => setLogoUrl(r.logoUrl ? `${r.logoUrl}?v=${Date.now()}` : null)).catch(() => {});
@@ -47,7 +71,8 @@ export function TvDisplayModule() {
       setAdsEnabled(r.settings.ads_enabled === '1');
       const configuredInterval = Number(r.settings.ads_interval_sec);
       if (Number.isFinite(configuredInterval)) setAdsIntervalSec(Math.min(360, Math.max(5, configuredInterval)));
-      setVoiceEnabled(r.settings.voice_enabled === '1');
+      // Voice announcements default to ON for new and upgraded installations. Only an explicit saved '0' disables them.
+      setVoiceEnabled(r.settings.voice_enabled !== '0');
       setBellEnabled(r.settings.bell_enabled === '1');
     });
     api.get<{ ads: Ad[] }>('/ads').then((r) => setAds(r.ads.filter((a) => a.is_active)));
