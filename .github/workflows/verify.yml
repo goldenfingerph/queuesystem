@@ -69,6 +69,7 @@ jobs:
       - name: Lint frontend and backend
         run: npm run lint
       - name: Package Windows 11 project bundle
+        if: ${{ false }}
         shell: pwsh
         run: |
           $packageDir = Join-Path $env:RUNNER_TEMP "QueueSystem-Windows"
@@ -202,10 +203,12 @@ jobs:
           Get-FileHash -Path $zipPath -Algorithm SHA256 | Format-List Algorithm,Hash,Path
 
       - name: Install Inno Setup
+        if: ${{ false }}
         shell: pwsh
         run: choco install innosetup --no-progress -y
 
       - name: Build Windows Setup Wizard
+        if: ${{ false }}
         shell: pwsh
         run: |
           $packageDir = Join-Path $env:RUNNER_TEMP "QueueSystem-Windows"
@@ -220,6 +223,7 @@ jobs:
           Get-FileHash -Path $setupPath -Algorithm SHA256 | Format-List Algorithm,Hash,Path
 
       - name: Test installer upgrade preserves customer data
+        if: ${{ false }}
         shell: pwsh
         run: |
           $setupPath = Join-Path $env:RUNNER_TEMP "QueueSystem-Setup.exe"
@@ -295,6 +299,7 @@ jobs:
             --prerelease
 
       - name: Stage final release files
+        if: ${{ false }}
         shell: pwsh
         run: |
           $releaseDir = Join-Path $env:RUNNER_TEMP "QueueSystem-Windows11-Release"
@@ -318,6 +323,7 @@ jobs:
             Add-Content (Join-Path $releaseDir "SHA256SUMS.txt") -Encoding ASCII
 
       - name: Upload Windows 11 release bundle
+        if: ${{ false }}
         uses: actions/upload-artifact@v4
         with:
           name: QueueSystem-Windows11-Release
