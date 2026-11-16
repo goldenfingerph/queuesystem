@@ -293,8 +293,8 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
       headers: { authorization: `Bearer ${token}` },
     });
     assert.equal(pdfExport.status, 200, await pdfExport.clone().text());
-    assert.match(pdfExport.headers.get('content-type') ?? '', /application\\/pdf/);
-    assert.match(pdfExport.headers.get('content-disposition') ?? '', /queuesystem-report-2026-11-08\\.pdf/);
+    assert.match(pdfExport.headers.get('content-type') ?? '', /application\/pdf/);
+    assert.match(pdfExport.headers.get('content-disposition') ?? '', /queuesystem-report-2026-11-08\.pdf/);
     const pdfBytes = Buffer.from(await pdfExport.arrayBuffer());
     assert.equal(pdfBytes.subarray(0, 8).toString('ascii'), '%PDF-1.4');
     assert.ok(pdfBytes.includes(Buffer.from('QueueSystem - Daily Queue Report')));
@@ -303,8 +303,8 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
       headers: { authorization: `Bearer ${token}` },
     });
     assert.equal(excelExport.status, 200, await excelExport.clone().text());
-    assert.match(excelExport.headers.get('content-type') ?? '', /spreadsheetml\\.sheet/);
-    assert.match(excelExport.headers.get('content-disposition') ?? '', /queuesystem-report-2026-11-08\\.xlsx/);
+    assert.match(excelExport.headers.get('content-type') ?? '', /spreadsheetml\.sheet/);
+    assert.match(excelExport.headers.get('content-disposition') ?? '', /queuesystem-report-2026-11-08\.xlsx/);
     const excelBytes = Buffer.from(await excelExport.arrayBuffer());
     assert.equal(excelBytes.readUInt32LE(0), 0x04034b50, 'Excel export must be a real ZIP-based XLSX workbook');
     assert.equal(excelBytes.readUInt32LE(excelBytes.length - 22), 0x06054b50, 'XLSX archive must include its end-of-central-directory record');
