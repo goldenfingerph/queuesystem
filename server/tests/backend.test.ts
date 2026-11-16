@@ -134,6 +134,7 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
   process.env.DB_PATH = path.join(directory, 'test.db');
   process.env.ADS_DIR = path.join(directory, 'uploads', 'ads');
   process.env.LOGO_DIR = path.join(directory, 'uploads', 'logo');
+  process.env.BACKUPS_DIR = path.join(directory, 'backups');
 
   let server: http.Server | undefined;
   let closeDb: (() => void) | undefined;
@@ -464,6 +465,49 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
 
     const admin = db.prepare("SELECT id FROM users WHERE username = 'admin'").get() as { id: number };
     const adminToken = middleware.createSession(admin.id);
+
+    const officerBackupList = await fetch(`http://127.0.0.1:${address.port}/api/backups`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    assert.equal(officerBackupList.status, 403, 'non-admin staff must not access database backups');
+
+    const backupResponse = await fetch(`http://127.0.0.1:${address.port}/api/backup`, {
+      method: 'POST',
+      headers: serviceHeaders,
+      body: JSON.stringify({}),
+    });
+    assert.equal(backupResponse.status, 200, await backupResponse.clone().text());
+    const backupResult = await backupResponse.json() as { filename: string; sizeBytes: number; retentionCount: number };
+    assert.match(backupResult.filename, /^queuesystem-backup-[\dTZ-]+\.db$/);
+    assert.ok(backupResult.sizeBytes > 0, 'backup endpoint must return a non-empty database snapshot');
+    assert.equal(backupResult.retentionCount, 30);
+
+    const backupListResponse = await fetch(`http://127.0.0.1:${address.port}/api/backups`, {
+      headers: { authorization: `Bearer ${adminToken}` },
+    });
+    assert.equal(backupListResponse.status, 200, await backupListResponse.clone().text());
+    const backupList = await backupListResponse.json() as {
+      backups: { id: number; filename: string; size_bytes: number }[];
+    };
+    const createdBackup = backupList.backups.find((item) => item.filename === backupResult.filename);
+    assert.ok(createdBackup, 'created backup must appear in the backup history');
+    assert.equal(createdBackup.size_bytes, backupResult.sizeBytes);
+
+    const backupDownloadResponse = await fetch(
+      `http://127.0.0.1:${address.port}/api/backups/${createdBackup.id}/download`,
+      { headers: { authorization: `Bearer ${adminToken}` } },
+    );
+    assert.equal(backupDownloadResponse.status, 200, await backupDownloadResponse.clone().text());
+    assert.ok(backupDownloadResponse.headers.get('content-disposition')?.includes(backupResult.filename));
+    const backupSnapshotPath = path.join(directory, 'downloaded-backup-test.db');
+    fs.writeFileSync(backupSnapshotPath, Buffer.from(await backupDownloadResponse.arrayBuffer()));
+    const backupSnapshot = new Database(backupSnapshotPath, { readonly: true, fileMustExist: true });
+    try {
+      assert.deepEqual(backupSnapshot.pragma('integrity_check'), [{ integrity_check: 'ok' }],
+        'downloaded backup must be a valid SQLite database');
+    } finally {
+      backupSnapshot.close();
+    }
 
     const callNextResponse = await fetch(`http://127.0.0.1:${address.port}/api/tickets/call-next`, {
       method: 'POST',
@@ -845,6 +889,7 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
     delete process.env.DB_PATH;
     delete process.env.ADS_DIR;
     delete process.env.LOGO_DIR;
+    delete process.env.BACKUPS_DIR;
     fs.rmSync(directory, { recursive: true, force: true });
   }
 });
