@@ -10,6 +10,17 @@ import { hasSupportedFileSignature } from '../lib/upload-validation.js';
 import { rotateBackups } from '../lib/backup-retention.js';
 import { pruneQueueEvents } from '../lib/queue-event-retention.js';
 import { getBusinessDate } from '../../shared/business-date.js';
+import { isSupportedBackupFilename } from '../lib/backup-validation.js';
+
+
+test('restore accepts generic and legacy backup names while rejecting unsafe paths', () => {
+  assert.equal(isSupportedBackupFilename('queuesystem-backup-2026-11-16T10-20-30-000Z.db'), true);
+  assert.equal(isSupportedBackupFilename('infinity-backup-2026-11-16T10-20-30-000Z.db'), true);
+  assert.equal(isSupportedBackupFilename('../queuesystem-backup-2026-11-16T10-20-30-000Z.db'), false);
+  assert.equal(isSupportedBackupFilename('queuesystem-pre-restore-2026-11-16T10-20-30-000Z.db'), false);
+  assert.equal(isSupportedBackupFilename('queuesystem-backup-latest.db'), false);
+  assert.equal(isSupportedBackupFilename('queuesystem-backup-2026-11-16T10-20-30-000Z.sqlite'), false);
+});
 
 
 
