@@ -114,7 +114,7 @@ export function createReportPdf(headers: string[], rows: Cell[][], title: string
   for (let pageIndex = 0; pageIndex < chunks.length; pageIndex += 1) {
     const commands: string[] = ['BT /F1 17 Tf 36 555 Td (' + pdfText(title) + ') Tj ET'];
     commands.push('BT /F1 9 Tf 36 538 Td (' + pdfText(subtitle) + ') Tj ET');
-    const widths = headers.map((_, i) => Math.max(7, Math.floor(770 / headers.length)));
+    const widths = headers.map(() => Math.max(7, Math.floor(770 / headers.length)));
     const headerLine = headers.map((h, i) => h.slice(0, Math.max(5, widths[i] - 1))).join(' | ');
     commands.push('BT /F1 8 Tf 36 515 Td (' + pdfText(headerLine.slice(0, 150)) + ') Tj ET');
     commands.push('36 508 m 806 508 l S');
