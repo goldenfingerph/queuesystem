@@ -473,7 +473,7 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
 
     const backupResponse = await fetch(`http://127.0.0.1:${address.port}/api/backup`, {
       method: 'POST',
-      headers: serviceHeaders,
+      headers: { authorization: `Bearer ${adminToken}`, 'content-type': 'application/json' },
       body: JSON.stringify({}),
     });
     assert.equal(backupResponse.status, 200, await backupResponse.clone().text());
