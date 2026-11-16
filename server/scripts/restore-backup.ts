@@ -9,7 +9,7 @@ function fail(message: string): never {
 }
 
 function isSupportedBackupFilename(filename: string): boolean {
-  return path.basename(filename) === filename && /^(?:queuesystem|infinity)-backup-[\\dTZ-]+\\.db$/.test(filename);
+  return path.basename(filename) === filename && /^(?:queuesystem|infinity)-backup-[\dTZ-]+\.db$/.test(filename);
 }
 
 function validateBackup(db: Database.Database): void {
