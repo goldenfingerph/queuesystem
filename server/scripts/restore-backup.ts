@@ -8,6 +8,10 @@ function fail(message: string): never {
   process.exit(1);
 }
 
+function isSupportedBackupFilename(filename: string): boolean {
+  return path.basename(filename) === filename && /^(?:queuesystem|infinity)-backup-[\\dTZ-]+\\.db$/.test(filename);
+}
+
 function validateBackup(db: Database.Database): void {
   const integrity = db.pragma('integrity_check') as { integrity_check: string }[];
   if (integrity.length !== 1 || integrity[0].integrity_check !== 'ok') {
@@ -25,7 +29,7 @@ function validateBackup(db: Database.Database): void {
   );
   const missingTables = requiredTables.filter((name) => !existingTables.has(name));
   if (missingTables.length) {
-    throw new Error(`Not a complete Infinity Services database; missing tables: ${missingTables.join(', ')}`);
+    throw new Error(`Not a complete QueueSystem database; missing tables: ${missingTables.join(', ')}`);
   }
 
   // Require the foundational schema only. Later migrations are deliberately
@@ -42,8 +46,8 @@ function validateBackup(db: Database.Database): void {
 }
 
 const filename = process.argv[2];
-if (!filename || path.basename(filename) !== filename || !/^infinity-backup-[\dTZ-]+\.db$/.test(filename)) {
-  fail('Usage: npm run db:restore -- infinity-backup-YYYY-MM-DDTHH-MM-SS-sssZ.db');
+if (!filename || !isSupportedBackupFilename(filename)) {
+  fail('Usage: npm run db:restore -- queuesystem-backup-YYYY-MM-DDTHH-MM-SS-sssZ.db (legacy infinity-backup files are also supported)');
 }
 const backupPath = path.resolve(config.backupsDir, filename);
 const dbPath = path.resolve(config.dbPath);
