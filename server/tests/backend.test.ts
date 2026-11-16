@@ -289,6 +289,33 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
     assert.ok(analytics.hourly.some((bucket) => bucket.hour === 12 && bucket.total === 1), 'Hourly arrivals must use the configured Asia/Dubai timezone');
     assert.ok(analytics.hourly.some((bucket) => bucket.hour === 13 && bucket.total === 1), `Unexpected company-local hourly analytics buckets: ${JSON.stringify(analytics.hourly)}`);
 
+    const pdfExport = await fetch(`http://127.0.0.1:${address.port}/api/reports/export.pdf?date=2026-11-08`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    assert.equal(pdfExport.status, 200, await pdfExport.clone().text());
+    assert.match(pdfExport.headers.get('content-type') ?? '', /application\\/pdf/);
+    assert.match(pdfExport.headers.get('content-disposition') ?? '', /queuesystem-report-2026-11-08\\.pdf/);
+    const pdfBytes = Buffer.from(await pdfExport.arrayBuffer());
+    assert.equal(pdfBytes.subarray(0, 8).toString('ascii'), '%PDF-1.4');
+    assert.ok(pdfBytes.includes(Buffer.from('QueueSystem - Daily Queue Report')));
+
+    const excelExport = await fetch(`http://127.0.0.1:${address.port}/api/reports/export.xlsx?date=2026-11-08`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    assert.equal(excelExport.status, 200, await excelExport.clone().text());
+    assert.match(excelExport.headers.get('content-type') ?? '', /spreadsheetml\\.sheet/);
+    assert.match(excelExport.headers.get('content-disposition') ?? '', /queuesystem-report-2026-11-08\\.xlsx/);
+    const excelBytes = Buffer.from(await excelExport.arrayBuffer());
+    assert.equal(excelBytes.readUInt32LE(0), 0x04034b50, 'Excel export must be a real ZIP-based XLSX workbook');
+    assert.equal(excelBytes.readUInt32LE(excelBytes.length - 22), 0x06054b50, 'XLSX archive must include its end-of-central-directory record');
+    assert.ok(excelBytes.includes(Buffer.from('xl/worksheets/sheet1.xml')));
+    assert.ok(excelBytes.includes(Buffer.from('QueueSystem - Daily Queue Report')));
+
+    const invalidPdfExport = await fetch(`http://127.0.0.1:${address.port}/api/reports/export.pdf?date=2026-02-30`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    assert.equal(invalidPdfExport.status, 400);
+
     const reversedAnalyticsRange = await fetch(`http://127.0.0.1:${address.port}/api/reports/analytics?from=2026-11-09&to=2026-11-08`, {
       headers: { authorization: `Bearer ${token}` },
     });

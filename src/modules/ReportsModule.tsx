@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { BarChart3, Download, Calendar, Filter } from 'lucide-react';
+import { BarChart3, Download, Calendar, Filter, FileText, FileSpreadsheet } from 'lucide-react';
 import { api } from '@/lib/api';
 import { AppLayout } from '@/components/AppLayout';
 import { getBusinessDate } from '../../shared/business-date';
@@ -116,6 +116,40 @@ export function ReportsModule() {
     }
   };
 
+  const exportFile = async (format: 'pdf' | 'xlsx') => {
+    if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(date) || Number.isNaN(Date.parse(`${date}T00:00:00`))) {
+      setError('Choose a valid report date before exporting.');
+      return;
+    }
+    const params = new URLSearchParams({ date });
+    if (serviceId) params.set('serviceId', serviceId);
+    const token = sessionStorage.getItem('infinity_token');
+    try {
+      const response = await fetch(`/api/reports/export.${format}?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) {
+        let message = 'Unable to export report. Please try again.';
+        try {
+          const body = await response.json();
+          if (typeof body.error === 'string') message = body.error;
+        } catch { /* Keep the fallback message for non-JSON errors. */ }
+        throw new Error(message);
+      }
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = objectUrl;
+      a.download = `queuesystem-report-${date}.${format}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : 'Unable to export report. Please try again.');
+    }
+  };
+
   const fmtTime = (sec: number | null) => {
     if (!sec) return '--';
     return `${Math.floor(sec / 60)}m ${Math.round(sec % 60)}s`;
@@ -129,9 +163,17 @@ export function ReportsModule() {
             <h1 className="text-2xl font-bold text-navy-900">Reports &amp; Analytics <span className="ml-2 text-brand-700" dir="rtl">التقارير والتحليلات</span></h1>
             <p className="text-sm text-navy-500">Daily totals, timing, and counter performance · إجمالي اليوم وأوقات الانتظار وأداء الشبابيك</p>
           </div>
-          <button onClick={exportCsv} className="btn bg-success-500/10 text-success-600 hover:bg-success-500/20 focus-ring">
-            <Download className="h-4 w-4" /> Export CSV · تصدير CSV
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button onClick={exportCsv} className="btn bg-success-500/10 text-success-600 hover:bg-success-500/20 focus-ring">
+              <Download className="h-4 w-4" /> CSV
+            </button>
+            <button onClick={() => exportFile('pdf')} className="btn bg-brand-500/10 text-brand-700 hover:bg-brand-500/20 focus-ring">
+              <FileText className="h-4 w-4" /> PDF
+            </button>
+            <button onClick={() => exportFile('xlsx')} className="btn bg-accent-500/10 text-accent-700 hover:bg-accent-500/20 focus-ring">
+              <FileSpreadsheet className="h-4 w-4" /> Excel
+            </button>
+          </div>
         </div>
 
         <div className="surface mb-6 flex flex-wrap items-end gap-4 p-4">

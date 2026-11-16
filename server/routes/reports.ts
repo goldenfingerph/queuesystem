@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { getDb } from '../db/index.js';
 import { getConfiguredBusinessDate } from '../lib/business-date.js';
+import { createReportPdf, createReportXlsx } from '../lib/report-export.js';
 
 function parseReportDate(value: unknown): string | null {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
@@ -236,6 +237,61 @@ export function reportsRouter(): Router {
     res.setHeader('Content-Disposition', `attachment; filename="report-${date}.csv"`);
     res.send('\uFEFF' + lines.join('\n'));
   });
+
+
+  const exportFile = (format: 'pdf' | 'xlsx') => (req: import('express').Request, res: import('express').Response) => {
+    const db = getDb();
+    const requestedDate = req.query.date;
+    const date = requestedDate === undefined ? getConfiguredBusinessDate(db) : parseReportDate(requestedDate);
+    if (!date) return res.status(400).json({ error: 'A valid report date is required.' });
+    const serviceId = parseReportServiceId(req.query.serviceId);
+    if (req.query.serviceId !== undefined && req.query.serviceId !== '' && serviceId === null) {
+      return res.status(400).json({ error: 'Service ID must be a positive whole number.' });
+    }
+    let where = 't.business_date = ?';
+    const params: unknown[] = [date];
+    if (serviceId !== null) { where += ' AND t.service_id = ?'; params.push(serviceId); }
+    const rows = db.prepare(
+      `SELECT t.number, t.status, t.priority, t.created_at, t.called_at, t.served_at, t.completed_at,
+       s.name AS service, s.name_ar AS service_ar, c.number AS counter,
+       vc.label_en AS category_en, vc.label_ar AS category_ar
+       FROM tickets t
+       LEFT JOIN services s ON s.id = t.service_id
+       LEFT JOIN counters c ON c.id = t.counter_id
+       LEFT JOIN visitor_categories vc ON vc.id = t.visitor_category_id
+       WHERE ${where} ORDER BY t.created_at`,
+    ).all(...params) as Record<string, unknown>[];
+    const headers = ['Ticket Number', 'Service', 'Service (Arabic)', 'Status', 'Priority', 'Category', 'Category (Arabic)', 'Counter', 'Created', 'Called', 'Service Started', 'Completed'];
+    const data = rows.map((row) => [
+      String(row.number ?? ''),
+      String(row.service ?? ''),
+      String(row.service_ar ?? ''),
+      String(row.status ?? ''),
+      String(row.priority ?? ''),
+      String(row.category_en ?? ''),
+      String(row.category_ar ?? ''),
+      row.counter === null || row.counter === undefined ? '' : Number(row.counter),
+      String(row.created_at ?? ''),
+      String(row.called_at ?? ''),
+      String(row.served_at ?? ''),
+      String(row.completed_at ?? ''),
+    ]);
+    const title = 'QueueSystem - Daily Queue Report';
+    const subtitle = `Business date: ${date}${serviceId === null ? ' | All services' : ' | Filtered service'}`;
+    if (format === 'xlsx') {
+      const file = createReportXlsx(headers, data, title, subtitle);
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename="queuesystem-report-${date}.xlsx"`);
+      return res.send(file);
+    }
+    const file = createReportPdf(headers, data, title, subtitle);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="queuesystem-report-${date}.pdf"`);
+    return res.send(file);
+  };
+
+  router.get('/export.xlsx', exportFile('xlsx'));
+  router.get('/export.pdf', exportFile('pdf'));
 
   return router;
 }
