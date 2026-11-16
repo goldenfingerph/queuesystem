@@ -2,14 +2,11 @@ import Database from 'better-sqlite3';
 import fs from 'node:fs';
 import path from 'node:path';
 import { config } from '../config.js';
+import { isSupportedBackupFilename } from '../lib/backup-validation.js';
 
 function fail(message: string): never {
   console.error(`[restore] ${message}`);
   process.exit(1);
-}
-
-function isSupportedBackupFilename(filename: string): boolean {
-  return path.basename(filename) === filename && /^(?:queuesystem|infinity)-backup-[\dTZ-]+\.db$/.test(filename);
 }
 
 function validateBackup(db: Database.Database): void {
