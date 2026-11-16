@@ -11,7 +11,7 @@ if not exist "%~dp0runtime\node\node.exe" (
 set "PATH=%~dp0runtime\node;%PATH%"
 
 echo ================================================
-echo   INFINITY SERVICES - DATABASE RESTORE
+echo   QueueSystem - DATABASE RESTORE
 echo ================================================
 where node >nul 2>nul
 if errorlevel 1 (
@@ -31,7 +31,7 @@ echo 1. Stop the queue server first (press CTRL+C in its server window).
 echo 2. Put the backup .db file inside server\data\backups.
 echo 3. Keep a separate copy of your current database before restoring.
 echo.
-set /p BACKUP_NAME=Enter the exact backup filename (infinity-backup-....db):
+set /p BACKUP_NAME=Enter backup filename (queuesystem-backup-....db or legacy infinity-backup-....db):
 if "%BACKUP_NAME%"=="" (
   echo No filename entered. Nothing was restored.
   pause
