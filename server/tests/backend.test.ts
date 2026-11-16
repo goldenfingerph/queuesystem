@@ -374,6 +374,14 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
     assert.equal(ticket.queued_for_counter_id, targetCounter);
     assert.equal(ticket.transfer_priority, 1);
 
+    const unauthorizedCounterCall = await fetch(`http://127.0.0.1:${address.port}/api/tickets/call-next`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ counter_id: targetCounter }),
+    });
+    assert.equal(unauthorizedCounterCall.status, 403,
+      'service officers must not call tickets from counters outside their active assignment');
+
     const setupStatusBefore = await fetch(`http://127.0.0.1:${address.port}/api/setup/status`);
     assert.equal(setupStatusBefore.status, 200);
     assert.deepEqual(await setupStatusBefore.json(), { required: true }, 'fresh installs must require the one-time setup wizard');
@@ -445,6 +453,29 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
 
     const admin = db.prepare("SELECT id FROM users WHERE username = 'admin'").get() as { id: number };
     const adminToken = middleware.createSession(admin.id);
+
+    const callNextResponse = await fetch(`http://127.0.0.1:${address.port}/api/tickets/call-next`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${adminToken}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ counter_id: targetCounter }),
+    });
+    assert.equal(callNextResponse.status, 200, await callNextResponse.clone().text());
+    const callNextData = await callNextResponse.json() as { ticket: { id: number; number: string } };
+    assert.equal(callNextData.ticket.id, ticketId, 'call-next must select the transferred ticket pinned to this counter');
+    assert.equal(callNextData.ticket.number, '1001', 'transfers must preserve the original ticket number');
+    const calledTicket = db.prepare('SELECT status, counter_id FROM tickets WHERE id = ?').get(ticketId) as {
+      status: string; counter_id: number | null;
+    };
+    assert.equal(calledTicket.status, 'called');
+    assert.equal(calledTicket.counter_id, targetCounter);
+
+    const duplicateCallNext = await fetch(`http://127.0.0.1:${address.port}/api/tickets/call-next`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${adminToken}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ counter_id: targetCounter }),
+    });
+    assert.equal(duplicateCallNext.status, 409,
+      'a counter with an active called ticket must not call a second ticket');
 
     const settingsAuditResponse = await fetch(`http://127.0.0.1:${address.port}/api/settings`, {
       method: 'PUT',
