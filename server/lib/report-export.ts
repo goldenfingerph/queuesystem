@@ -108,44 +108,66 @@ function pdfText(value: string): string {
 }
 
 export function createReportPdf(headers: string[], rows: Cell[][], title: string, subtitle: string): Buffer {
-  const pageRows = 25;
+  const pageRows = 22;
+  const columnsPerPage = 5;
+  const rowChunks = rows.length
+    ? Array.from({ length: Math.ceil(rows.length / pageRows) }, (_, index) => rows.slice(index * pageRows, (index + 1) * pageRows))
+    : [[]];
+  const panels = Math.max(1, Math.ceil(headers.length / columnsPerPage));
   const pages: string[] = [];
-  const chunks = rows.length ? Array.from({ length: Math.ceil(rows.length / pageRows) }, (_, i) => rows.slice(i * pageRows, (i + 1) * pageRows)) : [[]];
-  for (let pageIndex = 0; pageIndex < chunks.length; pageIndex += 1) {
-    const commands: string[] = ['BT /F1 17 Tf 36 555 Td (' + pdfText(title) + ') Tj ET'];
-    commands.push('BT /F1 9 Tf 36 538 Td (' + pdfText(subtitle) + ') Tj ET');
-    const widths = headers.map(() => Math.max(7, Math.floor(770 / headers.length)));
-    const headerLine = headers.map((h, i) => h.slice(0, Math.max(5, widths[i] - 1))).join(' | ');
-    commands.push('BT /F1 8 Tf 36 515 Td (' + pdfText(headerLine.slice(0, 150)) + ') Tj ET');
-    commands.push('36 508 m 806 508 l S');
-    chunks[pageIndex].forEach((row, rowIndex) => {
-      const line = row.map((cell, i) => String(cell ?? '').replace(/[\r\n]+/g, ' ').slice(0, Math.max(6, widths[i] - 1))).join(' | ');
-      commands.push(`BT /F1 7 Tf 36 ${492 - rowIndex * 18} Td (${pdfText(line.slice(0, 160))}) Tj ET`);
-    });
-    commands.push(`BT /F1 8 Tf 740 20 Td (Page ${pageIndex + 1} of ${chunks.length}) Tj ET`);
-    pages.push(commands.join('\n'));
+  for (const chunk of rowChunks) {
+    for (let panel = 0; panel < panels; panel += 1) {
+      const firstColumn = panel * columnsPerPage;
+      const lastColumn = Math.min(firstColumn + columnsPerPage, headers.length);
+      const visibleHeaders = headers.slice(firstColumn, lastColumn);
+      const columnWidth = 770 / Math.max(visibleHeaders.length, 1);
+      const commands: string[] = [
+        '0.12 0.18 0.28 rg',
+        'BT /F1 16 Tf 36 555 Td (' + pdfText(title) + ') Tj ET',
+        '0.35 0.39 0.45 rg',
+        'BT /F1 9 Tf 36 538 Td (' + pdfText(subtitle) + ') Tj ET',
+        'BT /F1 8 Tf 36 522 Td (' + pdfText('Columns ' + (firstColumn + 1) + '-' + lastColumn + ' of ' + headers.length) + ') Tj ET',
+        '0.91 0.93 0.96 rg 36 496 770 20 re f',
+        '0.12 0.18 0.28 rg',
+      ];
+      visibleHeaders.forEach((header, index) => {
+        const x = 40 + index * columnWidth;
+        commands.push('BT /F1 8 Tf ' + x.toFixed(2) + ' 503 Td (' + pdfText(header.slice(0, 25)) + ') Tj ET');
+      });
+      chunk.forEach((row, rowIndex) => {
+        const y = 480 - rowIndex * 20;
+        if (rowIndex % 2 === 1) commands.push('0.97 0.98 0.99 rg 36 ' + (y - 5) + ' 770 18 re f 0.12 0.18 0.28 rg');
+        visibleHeaders.forEach((_, columnIndex) => {
+          const value = String(row[firstColumn + columnIndex] ?? '').replace(/[\r\n]+/g, ' ');
+          const x = 40 + columnIndex * columnWidth;
+          commands.push('BT /F1 7 Tf ' + x.toFixed(2) + ' ' + y + ' Td (' + pdfText(value.slice(0, 27)) + ') Tj ET');
+        });
+      });
+      commands.push('0.55 0.59 0.65 RG 36 35 m 806 35 l S');
+      commands.push('BT /F1 8 Tf 690 20 Td (' + pdfText('Page ' + (pages.length + 1) + ' of ' + (rowChunks.length * panels)) + ') Tj ET');
+      pages.push(commands.join('\n'));
+    }
   }
-
   const objects: string[] = [];
-  const pageObjectIds = pages.map((_, i) => 4 + i * 2);
+  const pageObjectIds = pages.map((_, index) => 4 + index * 2);
   objects.push('<< /Type /Catalog /Pages 2 0 R >>');
-  objects.push(`<< /Type /Pages /Kids [${pageObjectIds.map((id) => `${id} 0 R`).join(' ')}] /Count ${pages.length} >>`);
+  objects.push('<< /Type /Pages /Kids [' + pageObjectIds.map((id) => id + ' 0 R').join(' ') + '] /Count ' + pages.length + ' >>');
   objects.push('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
-  pages.forEach((page, i) => {
-    const contentId = 5 + i * 2;
+  pages.forEach((page, index) => {
+    const contentId = 5 + index * 2;
     const stream = Buffer.from(page, 'ascii');
-    objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << /Font << /F1 3 0 R >> >> /Contents ${contentId} 0 R >>`);
-    objects.push(`<< /Length ${stream.length} >>\nstream\n${page}\nendstream`);
+    objects.push('<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << /Font << /F1 3 0 R >> >> /Contents ' + contentId + ' 0 R >>');
+    objects.push('<< /Length ' + stream.length + ' >>\nstream\n' + page + '\nendstream');
   });
   let output = '%PDF-1.4\n';
   const offsets = [0];
-  objects.forEach((object, i) => {
+  objects.forEach((object, index) => {
     offsets.push(Buffer.byteLength(output, 'ascii'));
-    output += `${i + 1} 0 obj\n${object}\nendobj\n`;
+    output += (index + 1) + ' 0 obj\n' + object + '\nendobj\n';
   });
   const xrefOffset = Buffer.byteLength(output, 'ascii');
-  output += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
-  for (let i = 1; i < offsets.length; i += 1) output += `${String(offsets[i]).padStart(10, '0')} 00000 n \n`;
-  output += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+  output += 'xref\n0 ' + (objects.length + 1) + '\n0000000000 65535 f \n';
+  for (let index = 1; index < offsets.length; index += 1) output += String(offsets[index]).padStart(10, '0') + ' 00000 n \n';
+  output += 'trailer\n<< /Size ' + (objects.length + 1) + ' /Root 1 0 R >>\nstartxref\n' + xrefOffset + '\n%%EOF';
   return Buffer.from(output, 'ascii');
 }

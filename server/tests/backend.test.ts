@@ -12,6 +12,24 @@ import { pruneQueueEvents } from '../lib/queue-event-retention.js';
 import { getBusinessDate } from '../../shared/business-date.js';
 import { isSupportedBackupFilename } from '../lib/backup-validation.js';
 
+function readStoredZipEntry(archive: Buffer, requestedName: string): Buffer | null {
+  let offset = 0;
+  while (offset + 30 <= archive.length && archive.readUInt32LE(offset) === 0x04034b50) {
+    const compressionMethod = archive.readUInt16LE(offset + 8);
+    const compressedSize = archive.readUInt32LE(offset + 18);
+    const fileNameLength = archive.readUInt16LE(offset + 26);
+    const extraLength = archive.readUInt16LE(offset + 28);
+    const nameStart = offset + 30;
+    const name = archive.subarray(nameStart, nameStart + fileNameLength).toString('utf8');
+    const dataStart = nameStart + fileNameLength + extraLength;
+    if (name === requestedName) {
+      assert.equal(compressionMethod, 0, 'XLSX test archive entries should use stored ZIP records');
+      return archive.subarray(dataStart, dataStart + compressedSize);
+    }
+    offset = dataStart + compressedSize;
+  }
+  return null;
+}
 
 test('restore accepts generic and legacy backup names while rejecting unsafe paths', () => {
   assert.equal(isSupportedBackupFilename('queuesystem-backup-2026-11-16T10-20-30-000Z.db'), true);
@@ -310,6 +328,15 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
     assert.equal(excelBytes.readUInt32LE(excelBytes.length - 22), 0x06054b50, 'XLSX archive must include its end-of-central-directory record');
     assert.ok(excelBytes.includes(Buffer.from('xl/worksheets/sheet1.xml')));
     assert.ok(excelBytes.includes(Buffer.from('QueueSystem - Daily Queue Report')));
+    const worksheetBytes = readStoredZipEntry(excelBytes, 'xl/worksheets/sheet1.xml');
+    assert.ok(worksheetBytes, 'XLSX must contain a readable worksheet entry');
+    const worksheetXml = worksheetBytes.toString('utf8');
+    assert.match(worksheetXml, /Ticket Number/);
+    assert.match(worksheetXml, /Service \(Arabic\)/);
+    assert.match(worksheetXml, /Category \(Arabic\)/);
+    assert.match(worksheetXml, /<autoFilter ref="A4:L/);
+    assert.match(pdfBytes.toString('ascii'), /Ticket Number/);
+    assert.match(pdfBytes.toString('ascii'), /Page 1 of/);
 
     const invalidPdfExport = await fetch(`http://127.0.0.1:${address.port}/api/reports/export.pdf?date=2026-02-30`, {
       headers: { authorization: `Bearer ${token}` },
