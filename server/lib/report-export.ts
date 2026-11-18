@@ -1,4 +1,8 @@
 import { Buffer } from 'node:buffer';
+import PDFDocument from 'pdfkit';
+import { textBidi } from 'bidi-shaper/pdfkit';
+import { render as renderBidi } from 'bidi-shaper';
+import { fileURLToPath } from 'node:url';
 
 type Cell = string | number | null | undefined;
 
@@ -106,71 +110,103 @@ export function createReportXlsx(headers: string[], rows: Cell[][], title: strin
   ]);
 }
 
-function pdfText(value: string): string {
-  return value.normalize('NFKD').replace(/[^\x20-\x7E]/g, '?').replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
+const arabicFontPath = fileURLToPath(new URL('../../node_modules/@fontsource/noto-kufi-arabic/files/noto-kufi-arabic-arabic-400-normal.woff2', import.meta.url));
+const arabicTextPattern = /[\\u0600-\\u06FF\\u0750-\\u077F\\u08A0-\\u08FF]/u;
+
+export function shapeArabicForPdf(value: string): string {
+  return arabicTextPattern.test(value) ? renderBidi(value) : value;
 }
 
-export function createReportPdf(headers: string[], rows: Cell[][], title: string, subtitle: string): Buffer {
+function printableLatin(value: string): string {
+  return value.normalize('NFKD').replace(/[^\\x20-\\x7E]/g, '?');
+}
+
+function drawPdfCell(
+  doc: InstanceType<typeof PDFDocument>,
+  value: string,
+  x: number,
+  y: number,
+  width: number,
+): void {
+  const text = value.replace(/[\\r\\n]+/g, ' ').slice(0, 42);
+  doc.fontSize(7);
+  if (arabicTextPattern.test(text)) {
+    doc.font('Arabic');
+    textBidi(doc, text, x + 3, y, {
+      width: Math.max(8, width - 6),
+      height: 16,
+      lineBreak: false,
+      ellipsis: true,
+      align: 'right',
+    });
+  } else {
+    doc.font('Helvetica');
+    doc.text(printableLatin(text), x + 3, y, {
+      width: Math.max(8, width - 6),
+      height: 16,
+      lineBreak: false,
+      ellipsis: true,
+    });
+  }
+}
+
+export async function createReportPdf(headers: string[], rows: Cell[][], title: string, subtitle: string): Promise<Buffer> {
   const pageRows = 22;
   const columnsPerPage = 5;
   const rowChunks = rows.length
     ? Array.from({ length: Math.ceil(rows.length / pageRows) }, (_, index) => rows.slice(index * pageRows, (index + 1) * pageRows))
     : [[]];
   const panels = Math.max(1, Math.ceil(headers.length / columnsPerPage));
-  const pages: string[] = [];
+  const totalPages = rowChunks.length * panels;
+  const doc = new PDFDocument({ size: [842, 595], margin: 0, compress: false });
+  const output: Buffer[] = [];
+  doc.on('data', (chunk: Buffer) => output.push(chunk));
+  const completed = new Promise<Buffer>((resolve, reject) => {
+    doc.on('end', () => resolve(Buffer.concat(output)));
+    doc.on('error', reject);
+  });
+  doc.registerFont('Arabic', arabicFontPath);
+
+  let pageNumber = 0;
   for (const chunk of rowChunks) {
     for (let panel = 0; panel < panels; panel += 1) {
+      if (pageNumber > 0) doc.addPage({ size: [842, 595], margin: 0 });
+      pageNumber += 1;
       const firstColumn = panel * columnsPerPage;
       const lastColumn = Math.min(firstColumn + columnsPerPage, headers.length);
       const visibleHeaders = headers.slice(firstColumn, lastColumn);
       const columnWidth = 770 / Math.max(visibleHeaders.length, 1);
-      const commands: string[] = [
-        '0.12 0.18 0.28 rg',
-        'BT /F1 16 Tf 36 555 Td (' + pdfText(title) + ') Tj ET',
-        '0.35 0.39 0.45 rg',
-        'BT /F1 9 Tf 36 538 Td (' + pdfText(subtitle) + ') Tj ET',
-        'BT /F1 8 Tf 36 522 Td (' + pdfText('Columns ' + (firstColumn + 1) + '-' + lastColumn + ' of ' + headers.length) + ') Tj ET',
-        '0.91 0.93 0.96 rg 36 496 770 20 re f',
-        '0.12 0.18 0.28 rg',
-      ];
+
+      doc.fillColor('#1f2e48').font('Helvetica').fontSize(16)
+        .text(printableLatin(title), 36, 30, { lineBreak: false });
+      doc.fillColor('#596373').fontSize(9)
+        .text(printableLatin(subtitle), 36, 54, { lineBreak: false });
+      doc.fontSize(8)
+        .text('Columns ' + (firstColumn + 1) + '-' + lastColumn + ' of ' + headers.length, 36, 72, { lineBreak: false });
+      doc.fillColor('#e9edf2').rect(36, 94, 770, 20).fill();
+      doc.fillColor('#1f2e48');
       visibleHeaders.forEach((header, index) => {
-        const x = 40 + index * columnWidth;
-        commands.push('BT /F1 8 Tf ' + x.toFixed(2) + ' 503 Td (' + pdfText(header.slice(0, 25)) + ') Tj ET');
-      });
-      chunk.forEach((row, rowIndex) => {
-        const y = 480 - rowIndex * 20;
-        if (rowIndex % 2 === 1) commands.push('0.97 0.98 0.99 rg 36 ' + (y - 5) + ' 770 18 re f 0.12 0.18 0.28 rg');
-        visibleHeaders.forEach((_, columnIndex) => {
-          const value = String(row[firstColumn + columnIndex] ?? '').replace(/[\r\n]+/g, ' ');
-          const x = 40 + columnIndex * columnWidth;
-          commands.push('BT /F1 7 Tf ' + x.toFixed(2) + ' ' + y + ' Td (' + pdfText(value.slice(0, 27)) + ') Tj ET');
+        const x = 36 + index * columnWidth;
+        doc.font('Helvetica').fontSize(8).text(printableLatin(header.slice(0, 32)), x + 3, 100, {
+          width: Math.max(8, columnWidth - 6), height: 12, lineBreak: false, ellipsis: true,
         });
       });
-      commands.push('0.55 0.59 0.65 RG 36 35 m 806 35 l S');
-      commands.push('BT /F1 8 Tf 690 20 Td (' + pdfText('Page ' + (pages.length + 1) + ' of ' + (rowChunks.length * panels)) + ') Tj ET');
-      pages.push(commands.join('\n'));
+      chunk.forEach((row, rowIndex) => {
+        const y = 118 + rowIndex * 19;
+        if (rowIndex % 2 === 1) doc.fillColor('#f7f8fa').rect(36, y - 3, 770, 18).fill();
+        doc.fillColor('#1f2e48');
+        visibleHeaders.forEach((_, columnIndex) => {
+          const x = 36 + columnIndex * columnWidth;
+          drawPdfCell(doc, String(row[firstColumn + columnIndex] ?? ''), x, y, columnWidth);
+        });
+      });
+      doc.strokeColor('#8c96a5').moveTo(36, 560).lineTo(806, 560).stroke();
+      doc.fillColor('#596373').font('Helvetica').fontSize(8)
+        .text('Page ' + pageNumber + ' of ' + totalPages, 690, 570, {
+          width: 116, align: 'right', lineBreak: false,
+        });
     }
   }
-  const objects: string[] = [];
-  const pageObjectIds = pages.map((_, index) => 4 + index * 2);
-  objects.push('<< /Type /Catalog /Pages 2 0 R >>');
-  objects.push('<< /Type /Pages /Kids [' + pageObjectIds.map((id) => id + ' 0 R').join(' ') + '] /Count ' + pages.length + ' >>');
-  objects.push('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
-  pages.forEach((page, index) => {
-    const contentId = 5 + index * 2;
-    const stream = Buffer.from(page, 'ascii');
-    objects.push('<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << /Font << /F1 3 0 R >> >> /Contents ' + contentId + ' 0 R >>');
-    objects.push('<< /Length ' + stream.length + ' >>\nstream\n' + page + '\nendstream');
-  });
-  let output = '%PDF-1.4\n';
-  const offsets = [0];
-  objects.forEach((object, index) => {
-    offsets.push(Buffer.byteLength(output, 'ascii'));
-    output += (index + 1) + ' 0 obj\n' + object + '\nendobj\n';
-  });
-  const xrefOffset = Buffer.byteLength(output, 'ascii');
-  output += 'xref\n0 ' + (objects.length + 1) + '\n0000000000 65535 f \n';
-  for (let index = 1; index < offsets.length; index += 1) output += String(offsets[index]).padStart(10, '0') + ' 00000 n \n';
-  output += 'trailer\n<< /Size ' + (objects.length + 1) + ' /Root 1 0 R >>\nstartxref\n' + xrefOffset + '\n%%EOF';
-  return Buffer.from(output, 'ascii');
+  doc.end();
+  return completed;
 }

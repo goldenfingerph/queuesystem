@@ -239,7 +239,7 @@ export function reportsRouter(): Router {
   });
 
 
-  const exportFile = (format: 'pdf' | 'xlsx') => (req: import('express').Request, res: import('express').Response) => {
+  const exportFile = (format: 'pdf' | 'xlsx') => async (req: import('express').Request, res: import('express').Response) => {
     const db = getDb();
     const requestedDate = req.query.date;
     const date = requestedDate === undefined ? getConfiguredBusinessDate(db) : parseReportDate(requestedDate);
@@ -284,20 +284,22 @@ export function reportsRouter(): Router {
       res.setHeader('Content-Disposition', `attachment; filename="queuesystem-report-${date}.xlsx"`);
       return res.send(file);
     }
-    const pdfHeaders = ['Ticket Number', 'Service', 'Status', 'Priority', 'Category', 'Counter', 'Created', 'Called', 'Service Started', 'Completed'];
+    const pdfHeaders = ['Ticket Number', 'Service', 'Service (Arabic)', 'Status', 'Priority', 'Category', 'Category (Arabic)', 'Counter', 'Created', 'Called', 'Service Started', 'Completed'];
     const pdfData = rows.map((row) => [
       String(row.number ?? ''),
       String(row.service ?? ''),
+      String(row.service_ar ?? ''),
       String(row.status ?? ''),
       String(row.priority ?? ''),
       String(row.category_en ?? ''),
+      String(row.category_ar ?? ''),
       row.counter === null || row.counter === undefined ? '' : Number(row.counter),
       String(row.created_at ?? ''),
       String(row.called_at ?? ''),
       String(row.served_at ?? ''),
       String(row.completed_at ?? ''),
     ]);
-    const file = createReportPdf(pdfHeaders, pdfData, title, subtitle);
+    const file = await createReportPdf(pdfHeaders, pdfData, title, subtitle);
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="queuesystem-report-${date}.pdf"`);
     return res.send(file);
