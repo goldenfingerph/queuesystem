@@ -3,7 +3,8 @@ import { Buffer } from 'node:buffer';
 type Cell = string | number | null | undefined;
 
 function xml(value: string): string {
-  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+  const validXmlText = value.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '');
+  return validXmlText.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
 }
 
 function crc32(data: Buffer): number {

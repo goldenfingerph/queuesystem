@@ -11,6 +11,7 @@ import { rotateBackups } from '../lib/backup-retention.js';
 import { pruneQueueEvents } from '../lib/queue-event-retention.js';
 import { getBusinessDate } from '../../shared/business-date.js';
 import { isSupportedBackupFilename } from '../lib/backup-validation.js';
+import { createReportPdf, createReportXlsx } from '../lib/report-export.js';
 
 function readStoredZipEntry(archive: Buffer, requestedName: string): Buffer | null {
   let offset = 0;
@@ -30,6 +31,29 @@ function readStoredZipEntry(archive: Buffer, requestedName: string): Buffer | nu
   }
   return null;
 }
+
+test('PDF and XLSX exports handle Arabic text, invalid XML controls, and multi-page layouts', () => {
+  const workbook = createReportXlsx(
+    ['Ticket & Number', 'Arabic Service'],
+    [['T-1001', 'خدمة المصدر\\u0001 <Main> & Co']],
+    'QueueSystem Report',
+    'Daily export',
+  );
+  const worksheet = readStoredZipEntry(workbook, 'xl/worksheets/sheet1.xml');
+  assert.ok(worksheet, 'XLSX must include its worksheet');
+  const worksheetXml = worksheet.toString('utf8');
+  assert.match(worksheetXml, /Ticket &amp; Number/);
+  assert.match(worksheetXml, /خدمة المصدر &lt;Main&gt; &amp; Co/);
+  assert.doesNotMatch(worksheetXml, /[\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F]/);
+
+  const headers = Array.from({ length: 12 }, (_, index) => `Column ${index + 1}`);
+  const rows = Array.from({ length: 23 }, (_, row) => headers.map((_, column) => `R${row + 1}C${column + 1}`));
+  const pdf = createReportPdf(headers, rows, 'QueueSystem Report', 'Pagination check').toString('ascii');
+  assert.match(pdf, /\\/Count 6/);
+  assert.match(pdf, /Page 6 of 6/);
+  assert.match(pdf, /Columns 11-12 of 12/);
+  assert.match(pdf, /R23C12/);
+});
 
 test('restore accepts generic and legacy backup names while rejecting unsafe paths', () => {
   assert.equal(isSupportedBackupFilename('queuesystem-backup-2026-11-16T10-20-30-000Z.db'), true);
@@ -332,6 +356,8 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
     assert.ok(worksheetBytes, 'XLSX must contain a readable worksheet entry');
     const worksheetXml = worksheetBytes.toString('utf8');
     assert.match(worksheetXml, /Ticket Number/);
+    assert.match(worksheetXml, /خدمة المصدر/);
+    assert.match(worksheetXml, /1001/);
     assert.match(worksheetXml, /Service \(Arabic\)/);
     assert.match(worksheetXml, /Category \(Arabic\)/);
     assert.match(worksheetXml, /<autoFilter ref="A4:L/);
