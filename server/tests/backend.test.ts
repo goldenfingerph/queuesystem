@@ -49,7 +49,7 @@ test('PDF and XLSX exports handle Arabic text, invalid XML controls, and multi-p
   const headers = Array.from({ length: 12 }, (_, index) => `Column ${index + 1}`);
   const rows = Array.from({ length: 23 }, (_, row) => headers.map((_, column) => `R${row + 1}C${column + 1}`));
   const pdf = createReportPdf(headers, rows, 'QueueSystem Report', 'Pagination check').toString('ascii');
-  assert.match(pdf, /\\/Count 6/);
+  assert.match(pdf, /\/Count 6/);
   assert.match(pdf, /Page 6 of 6/);
   assert.match(pdf, /Columns 11-12 of 12/);
   assert.match(pdf, /R23C12/);
