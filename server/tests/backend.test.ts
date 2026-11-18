@@ -44,6 +44,7 @@ test('PDF and XLSX exports handle Arabic text, invalid XML controls, and multi-p
   const worksheetXml = worksheet.toString('utf8');
   assert.match(worksheetXml, /Ticket &amp; Number/);
   assert.match(worksheetXml, /خدمة المصدر &lt;Main&gt; &amp; Co/);
+  // eslint-disable-next-line no-control-regex
   assert.doesNotMatch(worksheetXml, /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/);
 
   const headers = Array.from({ length: 12 }, (_, index) => `Column ${index + 1}`);
