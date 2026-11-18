@@ -35,7 +35,7 @@ function readStoredZipEntry(archive: Buffer, requestedName: string): Buffer | nu
 test('PDF and XLSX exports handle Arabic text, invalid XML controls, and multi-page layouts', () => {
   const workbook = createReportXlsx(
     ['Ticket & Number', 'Arabic Service'],
-    [['T-1001', 'خدمة المصدر\\u0001 <Main> & Co']],
+    [['T-1001', 'خدمة المصدر\u0001 <Main> & Co']],
     'QueueSystem Report',
     'Daily export',
   );
@@ -44,7 +44,7 @@ test('PDF and XLSX exports handle Arabic text, invalid XML controls, and multi-p
   const worksheetXml = worksheet.toString('utf8');
   assert.match(worksheetXml, /Ticket &amp; Number/);
   assert.match(worksheetXml, /خدمة المصدر &lt;Main&gt; &amp; Co/);
-  assert.doesNotMatch(worksheetXml, /[\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F]/);
+  assert.doesNotMatch(worksheetXml, /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/);
 
   const headers = Array.from({ length: 12 }, (_, index) => `Column ${index + 1}`);
   const rows = Array.from({ length: 23 }, (_, row) => headers.map((_, column) => `R${row + 1}C${column + 1}`));
