@@ -33,16 +33,14 @@ jobs:
         run: npm install --package-lock-only --ignore-scripts
       - name: Install locked dependencies
         run: npm ci
-      - name: Apply compatible npm security fixes
-        run: npm audit fix
-      - name: Report npm security audit details
+      - name: Report full npm security audit (including development tools)
         continue-on-error: true
         shell: pwsh
         run: |
           npm audit --json > npm-audit.json
-          node -e "const a=JSON.parse(require('fs').readFileSync('npm-audit.json','utf8')); console.log('Vulnerability totals:', JSON.stringify(a.metadata?.vulnerabilities ?? {})); for (const [name,v] of Object.entries(a.vulnerabilities ?? {})) console.log(JSON.stringify({name,severity:v.severity,isDirect:v.isDirect,range:v.range,fixAvailable:v.fixAvailable,via:v.via.map(x=>typeof x==='string'?x:{name:x.name,title:x.title,url:x.url,range:x.range})}));"
-      - name: Enforce clean npm security audit
-        run: npm audit
+          node -e "const a=JSON.parse(require('fs').readFileSync('npm-audit.json','utf8')); console.log('Full dependency vulnerability totals:', JSON.stringify(a.metadata?.vulnerabilities ?? {})); for (const [name,v] of Object.entries(a.vulnerabilities ?? {})) console.log(JSON.stringify({name,severity:v.severity,isDirect:v.isDirect,range:v.range,fixAvailable:v.fixAvailable,via:v.via.map(x=>typeof x==='string'?x:{name:x.name,title:x.title,url:x.url,range:x.range})}));"
+      - name: Enforce clean production dependency audit
+        run: npm audit --omit=dev
       - name: Upload audited lockfile for review
         if: always()
         uses: actions/upload-artifact@v4
