@@ -109,7 +109,7 @@ export function createReportXlsx(headers: string[], rows: Cell[][], title: strin
   ]);
 }
 
-const arabicFontPath = fileURLToPath(new URL('../../node_modules/@fontsource/noto-kufi-arabic/files/noto-kufi-arabic-arabic-400-normal.woff2', import.meta.url));
+const arabicFontPath = fileURLToPath(new URL('../../node_modules/@expo-google-fonts/noto-kufi-arabic/400Regular/NotoKufiArabic_400Regular.ttf', import.meta.url));
 const arabicTextPattern = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]/u;
 
 export function shapeArabicForPdf(value: string): string {
