@@ -132,7 +132,8 @@ function drawPdfCell(
   doc.fontSize(7);
   if (arabicTextPattern.test(text)) {
     doc.font('Arabic');
-    textBidi(doc, text, x + 3, y, {
+    // bidi-shaper's PDFKit declaration is narrower than PDFKit's overloaded text() signature.
+    textBidi(doc as unknown as Parameters<typeof textBidi>[0], text, x + 3, y, {
       width: Math.max(8, width - 6),
       height: 16,
       lineBreak: false,
