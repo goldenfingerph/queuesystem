@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import {
   LayoutDashboard, ConciergeBell, MonitorCheck, Users, SlidersHorizontal,
-  Ticket, Headset, Tv, BarChart3, Settings, ShieldCheck, LogOut, KeyRound, X, Palette,
+  Ticket, Headset, Tv, BarChart3, History, Settings, ShieldCheck, LogOut, KeyRound, X, Palette,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { ROLE_PERMISSIONS, type ModuleId, type StaffRole } from '@/types/domain';
@@ -18,6 +18,7 @@ const MODULE_ICON: Record<ModuleId, typeof LayoutDashboard> = {
   'counter-desk': Headset,
   'tv-display': Tv,
   reports: BarChart3,
+  'ticket-history': History,
   'system-settings': Settings,
 };
 
@@ -31,6 +32,7 @@ const MODULE_LABEL: Record<ModuleId, string> = {
   'counter-desk': 'Counter Desk',
   'tv-display': 'TV Display',
   reports: 'Reports',
+  'ticket-history': 'Ticket History',
   'system-settings': 'Settings',
 };
 
