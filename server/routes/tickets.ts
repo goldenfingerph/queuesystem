@@ -40,7 +40,7 @@ export function ticketsRouter(): Router {
     const fromDate = typeof req.query.fromDate === 'string' ? req.query.fromDate : undefined;
     const toDate = typeof req.query.toDate === 'string' ? req.query.toDate : undefined;
     const search = typeof req.query.search === 'string' ? req.query.search.trim() : undefined;
-    const isValidDate = (value: string) => /^\\d{4}-\\d{2}-\\d{2}$/.test(value)
+    const isValidDate = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value)
       && !Number.isNaN(Date.parse(value))
       && new Date(`${value}T00:00:00.000Z`).toISOString().slice(0, 10) === value;
     if (req.query.fromDate !== undefined && (!fromDate || !isValidDate(fromDate))) {
