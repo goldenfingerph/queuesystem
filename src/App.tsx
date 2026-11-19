@@ -13,6 +13,7 @@ import { ReceptionModule } from '@/modules/ReceptionModule';
 import { CounterDeskModule } from '@/modules/CounterDeskModule';
 import { TvDisplayModule } from '@/modules/TvDisplayModule';
 import { ReportsModule } from '@/modules/ReportsModule';
+import { TicketHistoryModule } from '@/modules/TicketHistoryModule';
 import { SystemSettingsModule } from '@/modules/SystemSettingsModule';
 import { SetupWizard } from '@/modules/SetupWizard';
 import { api } from '@/lib/api';
@@ -93,6 +94,7 @@ function Router() {
     case 'reception': return <ReceptionModule />;
     case 'counter-desk': return <CounterDeskModule />;
     case 'reports': return <ReportsModule />;
+    case 'ticket-history': return <TicketHistoryModule />;
     case 'system-settings': return <SystemSettingsModule />;
     case 'tv-display': return <TvDisplayModule />;
     default: return <DashboardModule />;
