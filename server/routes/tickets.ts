@@ -85,7 +85,7 @@ export function ticketsRouter(): Router {
       params.push(pattern, pattern, pattern);
     }
     const whereSql = where.length ? 'WHERE ' + where.join(' AND ') : '';
-    const total = (db.prepare(`SELECT COUNT(*) AS total FROM tickets t ${whereSql}`)
+    const total = (db.prepare(`SELECT COUNT(*) AS total FROM tickets t LEFT JOIN services s ON s.id = t.service_id ${whereSql}`)
       .get(...params) as { total: number }).total;
     const sql = `SELECT t.*, s.name AS service_name, s.prefix AS service_prefix,
        c.number AS counter_number, vc.label_en AS category_label, vc.label_ar AS category_label_ar
