@@ -37,6 +37,24 @@ export function ticketsRouter(): Router {
     const db = getDb();
     const status = typeof req.query.status === 'string' ? req.query.status : undefined;
     const serviceId = typeof req.query.serviceId === 'string' ? req.query.serviceId : undefined;
+    const fromDate = typeof req.query.fromDate === 'string' ? req.query.fromDate : undefined;
+    const toDate = typeof req.query.toDate === 'string' ? req.query.toDate : undefined;
+    const search = typeof req.query.search === 'string' ? req.query.search.trim() : undefined;
+    const isValidDate = (value: string) => /^\\d{4}-\\d{2}-\\d{2}$/.test(value)
+      && !Number.isNaN(Date.parse(value))
+      && new Date(`${value}T00:00:00.000Z`).toISOString().slice(0, 10) === value;
+    if (req.query.fromDate !== undefined && (!fromDate || !isValidDate(fromDate))) {
+      res.status(400).json({ error: 'Invalid start date filter' }); return;
+    }
+    if (req.query.toDate !== undefined && (!toDate || !isValidDate(toDate))) {
+      res.status(400).json({ error: 'Invalid end date filter' }); return;
+    }
+    if (fromDate && toDate && fromDate > toDate) {
+      res.status(400).json({ error: 'Start date must not be after end date' }); return;
+    }
+    if (req.query.search !== undefined && (search === undefined || search.length > 80)) {
+      res.status(400).json({ error: 'Search text must be 80 characters or fewer' }); return;
+    }
     const rawLimit = req.query.limit === undefined ? 100 : Number(req.query.limit);
     const limit = Number.isInteger(rawLimit) && rawLimit >= 1 ? Math.min(rawLimit, 500) : 100;
     const rawPage = req.query.page === undefined ? 1 : Number(req.query.page);
@@ -59,6 +77,13 @@ export function ticketsRouter(): Router {
     const params: unknown[] = [];
     if (status) { where.push('t.status = ?'); params.push(status); }
     if (serviceId) { where.push('t.service_id = ?'); params.push(Number(serviceId)); }
+    if (fromDate) { where.push('t.business_date >= ?'); params.push(fromDate); }
+    if (toDate) { where.push('t.business_date <= ?'); params.push(toDate); }
+    if (search) {
+      where.push('(CAST(t.number AS TEXT) LIKE ? OR s.name LIKE ? OR s.prefix LIKE ?)');
+      const pattern = `%${search}%`;
+      params.push(pattern, pattern, pattern);
+    }
     const whereSql = where.length ? 'WHERE ' + where.join(' AND ') : '';
     const total = (db.prepare(`SELECT COUNT(*) AS total FROM tickets t ${whereSql}`)
       .get(...params) as { total: number }).total;
