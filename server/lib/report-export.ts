@@ -111,14 +111,14 @@ export function createReportXlsx(headers: string[], rows: Cell[][], title: strin
 }
 
 const arabicFontPath = fileURLToPath(new URL('../../node_modules/@fontsource/noto-kufi-arabic/files/noto-kufi-arabic-arabic-400-normal.woff2', import.meta.url));
-const arabicTextPattern = /[\\u0600-\\u06FF\\u0750-\\u077F\\u08A0-\\u08FF]/u;
+const arabicTextPattern = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]/u;
 
 export function shapeArabicForPdf(value: string): string {
   return arabicTextPattern.test(value) ? renderBidi(value) : value;
 }
 
 function printableLatin(value: string): string {
-  return value.normalize('NFKD').replace(/[^\\x20-\\x7E]/g, '?');
+  return value.normalize('NFKD').replace(/[^\x20-\x7E]/g, '?');
 }
 
 function drawPdfCell(
