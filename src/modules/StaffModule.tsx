@@ -150,11 +150,11 @@ export function StaffModule() {
     setError('');
     const username = form.username.trim();
     const displayName = form.display_name.trim();
-    if (!displayName || displayName.length > 100) { setError('Display name is required and must be 100 characters or fewer.'); return; }
-    if (!editId && !/^[a-zA-Z0-9._-]{3,64}$/.test(username)) { setError('Username must be 3–64 characters and use only letters, numbers, dots, underscores, or hyphens.'); return; }
-    if (!editId && form.password.length < 8) { setError('Password must be at least 8 characters.'); return; }
+    if (!displayName || displayName.length > 80) { setError('Display name is required and must be 100 characters or fewer.'); return; }
+    if (!editId && !/^[a-zA-Z0-9._-]{3,40}$/.test(username)) { setError('Username must be 3–40 characters and use only letters, numbers, dots, underscores, or hyphens.'); return; }
+    if (!editId && form.password.length < 12) { setError('Password must be at least 12 characters.'); return; }
     if (form.password && form.password.length < 8) { setError('Password must be at least 8 characters.'); return; }
-    if (form.password.length > 128) { setError('Password must be 128 characters or fewer.'); return; }
+    if (form.password.length > 200) { setError('Password must be 200 characters or fewer.'); return; }
     try {
       const body: Record<string, unknown> = { display_name: displayName, role: form.role, is_active: form.is_active };
       if (form.password) body.password = form.password;
@@ -308,9 +308,9 @@ export function StaffModule() {
               </div>
               {error && <p className="mb-3 rounded-lg bg-error-500/10 px-3 py-2 text-sm text-error-600">{error}</p>}
               <div className="space-y-3">
-                <input className="input-field" placeholder="Display name" maxLength={100} value={form.display_name} onChange={(e) => setForm({ ...form, display_name: e.target.value })} required />
-                <input className="input-field" placeholder="Username" minLength={3} maxLength={64} pattern="[A-Za-z0-9._-]+" autoComplete="username" value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} required disabled={!!editId} />
-                <input className="input-field" type="password" minLength={8} maxLength={128} autoComplete={editId ? 'new-password' : 'new-password'} placeholder={editId ? 'New password (leave blank to keep)' : 'Password'} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required={!editId} />
+                <input className="input-field" placeholder="Display name" maxLength={80} value={form.display_name} onChange={(e) => setForm({ ...form, display_name: e.target.value })} required />
+                <input className="input-field" placeholder="Username" minLength={3} maxLength={40} pattern="[A-Za-z0-9._-]+" autoComplete="username" value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} required disabled={!!editId} />
+                <input className="input-field" type="password" minLength={12} maxLength={200} autoComplete={editId ? 'new-password' : 'new-password'} placeholder={editId ? 'New password (leave blank to keep)' : 'Password'} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required={!editId} />
                 <select className="input-field" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as StaffRole })}>
                   {STAFF_ROLES.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
                 </select>
