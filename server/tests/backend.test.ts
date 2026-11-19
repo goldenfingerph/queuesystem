@@ -50,7 +50,7 @@ test('PDF and XLSX exports handle Arabic text, invalid XML controls, and multi-p
   const shapedArabic = shapeArabicForPdf('رقم التذكرة ١٢٣');
   assert.notEqual(shapedArabic, 'رقم التذكرة ١٢٣', 'Arabic letters must be contextually shaped and reordered');
   assert.match(shapedArabic, /١٢٣/, 'Arabic-Indic digits must remain in reading order');
-  assert.match(shapedArabic, /[\\uFB50-\\uFEFF]/u, 'Arabic letters must use presentation forms');
+  assert.match(shapedArabic, /[\uFB50-\uFEFF]/u, 'Arabic letters must use presentation forms');
 
   const headers = Array.from({ length: 12 }, (_, index) => `Column ${index + 1}`);
   const rows = Array.from({ length: 23 }, (_, row) => headers.map((_, column) => `R${row + 1}C${column + 1}`));
@@ -345,7 +345,7 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
     assert.match(pdfExport.headers.get('content-type') ?? '', /application\/pdf/);
     assert.match(pdfExport.headers.get('content-disposition') ?? '', /queuesystem-report-2026-11-08\.pdf/);
     const pdfBytes = Buffer.from(await pdfExport.arrayBuffer());
-    assert.equal(pdfBytes.subarray(0, 8).toString('ascii'), '%PDF-1.4');
+    assert.equal(pdfBytes.subarray(0, 8).toString('ascii'), '%PDF-1.3', 'PDFKit currently emits a valid PDF 1.3 document');
     assert.ok(pdfBytes.includes(Buffer.from('QueueSystem - Daily Queue Report')));
 
     const excelExport = await fetch(`http://127.0.0.1:${address.port}/api/reports/export.xlsx?date=2026-11-08`, {
