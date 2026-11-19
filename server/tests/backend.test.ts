@@ -57,9 +57,9 @@ test('PDF and XLSX exports handle Arabic text, invalid XML controls, and multi-p
   rows[0][1] = 'خدمة العملاء';
   rows[0][6] = 'الفئة الرئيسية';
   const pdf = (await createReportPdf(headers, rows, 'QueueSystem Report', 'Pagination check')).toString('latin1');
-  assert.match(pdf, /\\/Count 6/, '22-row pagination and three 5-column panels must be retained');
-  assert.match(pdf, /\\/FontFile2/, 'PDF must embed the Arabic-capable font');
-  assert.match(pdf, /\\/ToUnicode/, 'PDF must include Unicode mappings for copy/search support');
+  assert.match(pdf, /\/Count 6/, '22-row pagination and three 5-column panels must be retained');
+  assert.match(pdf, /\/FontFile2/, 'PDF must embed the Arabic-capable font');
+  assert.match(pdf, /\/ToUnicode/, 'PDF must include Unicode mappings for copy/search support');
 });
 
 test('restore accepts generic and legacy backup names while rejecting unsafe paths', () => {
