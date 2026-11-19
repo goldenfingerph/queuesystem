@@ -318,6 +318,32 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
     assert.equal(secondPageData.pagination.hasNextPage, false);
     assert.equal(secondPageData.pagination.hasPreviousPage, true);
 
+    const historyResponse = await fetch(`http://127.0.0.1:${address.port}/api/tickets?fromDate=2026-11-08&toDate=2026-11-08&search=Source%20service&page=1&limit=10`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    assert.equal(historyResponse.status, 200, await historyResponse.clone().text());
+    const historyData = await historyResponse.json() as {
+      tickets: Array<{ number: string; service_name: string; service_prefix: string; category_label: string | null; counter_number: number | null }>;
+      pagination: { total: number };
+    };
+    assert.equal(historyData.pagination.total, 3, 'history date and service-name filters must return matching tickets');
+    assert.ok(historyData.tickets.every((ticket) => ticket.service_name === 'Source service'));
+    assert.equal(historyData.tickets[0]?.service_prefix, 'S');
+    assert.equal(historyData.tickets[0]?.category_label, null);
+    assert.equal(historyData.tickets[0]?.counter_number, null);
+
+    const historyPrefixResponse = await fetch(`http://127.0.0.1:${address.port}/api/tickets?fromDate=2026-11-08&toDate=2026-11-08&search=S&page=1&limit=10`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    assert.equal(historyPrefixResponse.status, 200);
+    const historyPrefixData = await historyPrefixResponse.json() as { pagination: { total: number } };
+    assert.equal(historyPrefixData.pagination.total, 3, 'history search must match service prefixes');
+
+    const invalidHistoryDate = await fetch(`http://127.0.0.1:${address.port}/api/tickets?fromDate=2026-02-30`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    assert.equal(invalidHistoryDate.status, 400, 'invalid calendar dates must be rejected');
+
     const analyticsResponse = await fetch(`http://127.0.0.1:${address.port}/api/reports/analytics?from=2026-11-08&to=2026-11-08`, {
       headers: { authorization: `Bearer ${token}` },
     });
