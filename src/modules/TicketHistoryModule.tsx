@@ -54,6 +54,7 @@ export function TicketHistoryModule() {
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
+  const [refreshKey, setRefreshKey] = useState(0);
   const [data, setData] = useState<TicketResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -88,7 +89,7 @@ export function TicketHistoryModule() {
       })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [fromDate, toDate, status, serviceId, search, page]);
+  }, [fromDate, toDate, status, serviceId, search, page, refreshKey]);
 
   const submitSearch = (event: FormEvent) => {
     event.preventDefault();
@@ -111,7 +112,7 @@ export function TicketHistoryModule() {
             </div>
             <p className="mt-1 text-sm text-navy-500">Search and review tickets across business dates.</p>
           </div>
-          <button type="button" onClick={() => setPage((current) => current)} className="btn bg-white text-navy-700 hover:bg-slate-50">
+          <button type="button" onClick={() => setRefreshKey((current) => current + 1)} className="btn bg-white text-navy-700 hover:bg-slate-50">
             <RefreshCw className="h-4 w-4" /> Refresh
           </button>
         </div>
