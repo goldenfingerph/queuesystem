@@ -346,7 +346,9 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
     assert.match(pdfExport.headers.get('content-disposition') ?? '', /queuesystem-report-2026-11-08\.pdf/);
     const pdfBytes = Buffer.from(await pdfExport.arrayBuffer());
     assert.equal(pdfBytes.subarray(0, 8).toString('ascii'), '%PDF-1.3', 'PDFKit currently emits a valid PDF 1.3 document');
-    assert.ok(pdfBytes.includes(Buffer.from('QueueSystem - Daily Queue Report')));
+    // PDFKit may split text operators, so verify the title survives as searchable text fragments.
+    assert.ok(pdfBytes.includes(Buffer.from('QueueSystem')));
+    assert.ok(pdfBytes.includes(Buffer.from('Daily Queue Report')));
 
     const excelExport = await fetch(`http://127.0.0.1:${address.port}/api/reports/export.xlsx?date=2026-11-08`, {
       headers: { authorization: `Bearer ${token}` },
