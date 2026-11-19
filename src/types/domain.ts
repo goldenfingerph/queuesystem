@@ -11,8 +11,8 @@ export const STAFF_ROLES: { id: StaffRole; label: string; description: string }[
 ];
 
 export const ROLE_PERMISSIONS: Record<StaffRole, ModuleId[]> = {
-  admin: ['dashboard', 'services', 'counters', 'staff', 'queue-settings', 'reception', 'counter-desk', 'tv-display', 'reports', 'system-settings'],
-  senior_clerk: ['dashboard', 'counters', 'queue-settings', 'counter-desk', 'reports'],
+  admin: ['dashboard', 'services', 'counters', 'staff', 'queue-settings', 'reception', 'counter-desk', 'tv-display', 'reports', 'ticket-history', 'system-settings'],
+  senior_clerk: ['dashboard', 'counters', 'queue-settings', 'counter-desk', 'reports', 'ticket-history'],
   service_officer: ['counter-desk'],
   receptionist: ['reception'],
 };
@@ -27,6 +27,7 @@ export type ModuleId =
   | 'counter-desk'
   | 'tv-display'
   | 'reports'
+  | 'ticket-history'
   | 'system-settings';
 
 export interface AppModule {
@@ -47,6 +48,7 @@ export const MODULES: AppModule[] = [
   { id: 'counter-desk', label: 'Counter Desk', short: 'Counter', description: 'Call next, recall, transfer, and complete tickets.', roles: ['service_officer', 'senior_clerk'] },
   { id: 'tv-display', label: 'Public TV Display', short: 'TV Display', description: 'Now-serving board with MP4 advertisement rotation.', roles: ['admin', 'service_officer', 'receptionist', 'senior_clerk'] },
   { id: 'reports', label: 'Reports & Analytics', short: 'Reports', description: 'Turnaround time, service volume, and counter performance.', roles: ['admin', 'senior_clerk'] },
+  { id: 'ticket-history', label: 'Ticket History', short: 'History', description: 'Search and review historical tickets with date and status filters.', roles: ['admin', 'senior_clerk'] },
   { id: 'system-settings', label: 'System Settings', short: 'Settings', description: 'LAN binding, backup, restore, and advertisement uploads.', roles: ['admin'] },
 ];
 
