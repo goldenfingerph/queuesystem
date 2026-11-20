@@ -2,7 +2,7 @@ import Database from 'better-sqlite3';
 import fs from 'node:fs';
 import path from 'node:path';
 import { config } from '../config.js';
-import { isSupportedBackupFilename } from '../lib/backup-validation.js';
+import { isSupportedBackupFilename, resolveSafeBackupPath } from '../lib/backup-validation.js';
 
 function fail(message: string): never {
   console.error(`[restore] ${message}`);
@@ -46,10 +46,10 @@ const filename = process.argv[2];
 if (!filename || !isSupportedBackupFilename(filename)) {
   fail('Usage: npm run db:restore -- queuesystem-backup-YYYY-MM-DDTHH-MM-SS-sssZ.db (legacy infinity-backup files are also supported)');
 }
-const backupPath = path.resolve(config.backupsDir, filename);
+const backupPath = resolveSafeBackupPath(config.backupsDir, filename);
 const dbPath = path.resolve(config.dbPath);
-if (!backupPath.startsWith(path.resolve(config.backupsDir) + path.sep) || !fs.existsSync(backupPath)) {
-  fail('Backup file not found in the configured local backups folder.');
+if (!backupPath) {
+  fail('Backup file must be a regular, non-symlink file inside the configured local backups folder.');
 }
 if (!fs.existsSync(dbPath)) fail('Current database does not exist; use the normal first-run setup instead.');
 if (fs.realpathSync(backupPath) === fs.realpathSync(dbPath)) fail('Backup cannot be the live database file.');
