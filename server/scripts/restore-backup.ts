@@ -68,15 +68,27 @@ const safetyName = `infinity-pre-restore-${new Date().toISOString().replace(/[:.
 const safetyPath = path.join(config.backupsDir, safetyName);
 const live = new Database(dbPath);
 try {
+  // Checkpoint before closing so the rollback database is self-contained.
+  live.pragma('wal_checkpoint(TRUNCATE)');
   await live.backup(safetyPath);
 } finally {
   live.close();
 }
 
 const tempPath = `${dbPath}.restore-tmp`;
+const rollbackPath = `${dbPath}.pre-restore`;
 let tempCreated = false;
+let liveMoved = false;
+let restoredInstalled = false;
 try {
-  fs.copyFileSync(backupPath, tempPath, fs.constants.COPYFILE_EXCL);
+  // Re-resolve immediately before copying to reduce the chance of a path
+  // being swapped after the initial validation.
+  const currentBackupPath = resolveSafeBackupPath(config.backupsDir, filename);
+  if (!currentBackupPath || currentBackupPath !== backupPath) {
+    throw new Error('Backup path changed after validation; no database changes were made.');
+  }
+
+  fs.copyFileSync(currentBackupPath, tempPath, fs.constants.COPYFILE_EXCL);
   tempCreated = true;
   const check = new Database(tempPath, { readonly: true, fileMustExist: true });
   try {
@@ -84,20 +96,55 @@ try {
   } finally {
     check.close();
   }
-  const rollbackPath = `${dbPath}.pre-restore`;
-  if (fs.existsSync(rollbackPath)) throw new Error('A previous restore rollback file already exists; move it aside before retrying.');
-  fs.renameSync(dbPath, rollbackPath);
-  try {
-    fs.renameSync(tempPath, dbPath);
-  } catch (replaceError) {
-    fs.renameSync(rollbackPath, dbPath);
-    throw replaceError;
+
+  if (fs.existsSync(rollbackPath)) {
+    throw new Error('A previous restore rollback file already exists; move it aside before retrying.');
   }
-  for (const suffix of ['-wal', '-shm']) fs.rmSync(dbPath + suffix, { force: true });
-  fs.rmSync(rollbackPath, { force: true });
-  console.log(`[restore] Database restored. Previous database saved as ${safetyName}`);
+
+  fs.renameSync(dbPath, rollbackPath);
+  liveMoved = true;
+  fs.renameSync(tempPath, dbPath);
+  tempCreated = false;
+  restoredInstalled = true;
+
+  // Validate the database at its final path before discarding the rollback.
+  const installed = new Database(dbPath, { readonly: true, fileMustExist: true });
+  try {
+    validateBackup(installed);
+  } finally {
+    installed.close();
+  }
+
+  // The previous database remains available as rollback until the restored
+  // database has passed integrity and schema validation.
+  try {
+    fs.rmSync(rollbackPath);
+    liveMoved = false;
+  } catch (cleanupError) {
+    console.warn('[restore] Restore succeeded, but the rollback file could not be removed:', cleanupError);
+    console.warn(`[restore] Keep ${rollbackPath} until it can be safely reviewed.`);
+  }
+
+  console.log(`[restore] Database restored. Previous database safety copy saved as ${safetyName}`);
   console.log('[restore] Start the server again and verify the dashboard and queue.');
 } catch (err) {
+  // If anything fails after the live file was moved, put it back. Never
+  // delete the only rollback copy as part of error cleanup.
+  if (liveMoved && fs.existsSync(rollbackPath)) {
+    try {
+      if (restoredInstalled && fs.existsSync(dbPath)) fs.rmSync(dbPath);
+      fs.renameSync(rollbackPath, dbPath);
+      liveMoved = false;
+      console.error('[restore] The original database was rolled back successfully.');
+    } catch (rollbackError) {
+      console.error('[restore] AUTOMATIC ROLLBACK FAILED. Do not start the server; preserve these files:', {
+        database: dbPath,
+        rollback: rollbackPath,
+        safetyBackup: safetyPath,
+        error: rollbackError,
+      });
+    }
+  }
   if (tempCreated) fs.rmSync(tempPath, { force: true });
   console.error('[restore] Restore failed. Check the current database and the safety backup before restarting the server.');
   throw err;
