@@ -10,7 +10,7 @@ import { hasSupportedFileSignature } from '../lib/upload-validation.js';
 import { rotateBackups } from '../lib/backup-retention.js';
 import { pruneQueueEvents } from '../lib/queue-event-retention.js';
 import { getBusinessDate } from '../../shared/business-date.js';
-import { isSupportedBackupFilename } from '../lib/backup-validation.js';
+import { isSupportedBackupFilename, resolveSafeBackupPath } from '../lib/backup-validation.js';
 import { createReportPdf, createReportXlsx, shapeArabicForPdf } from '../lib/report-export.js';
 
 function readStoredZipEntry(archive: Buffer, requestedName: string): Buffer | null {
@@ -74,6 +74,35 @@ test('restore accepts generic and legacy backup names while rejecting unsafe pat
 
 
 
+
+test('restore path resolution rejects missing files and symlink escapes', (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'queuesystem-restore-path-'));
+  const backups = path.join(root, 'backups');
+  const outside = path.join(root, 'outside.db');
+  fs.mkdirSync(backups);
+  try {
+    const validName = 'queuesystem-backup-2026-11-16T10-20-30-000Z.db';
+    const validPath = path.join(backups, validName);
+    fs.writeFileSync(validPath, 'backup');
+    fs.writeFileSync(outside, 'outside');
+
+    assert.equal(resolveSafeBackupPath(backups, validName), fs.realpathSync(validPath));
+    assert.equal(resolveSafeBackupPath(backups, 'queuesystem-backup-missing.db'), null);
+    assert.equal(resolveSafeBackupPath(backups, '../outside.db'), null);
+
+    const linkPath = path.join(backups, 'queuesystem-backup-2026-11-17T10-20-30-000Z.db');
+    try {
+      fs.symlinkSync(outside, linkPath, 'file');
+    } catch (error) {
+      t.skip(`Symlink creation is unavailable on this runner: ${error instanceof Error ? error.message : String(error)}`);
+      return;
+    }
+    assert.equal(resolveSafeBackupPath(backups, path.basename(linkPath)), null,
+      'a backup symlink must not allow restoring a file outside the backup directory');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
 
 test('queue event retention prunes only aged terminal-ticket history and keeps each final event', () => {
   const db = new Database(':memory:');
