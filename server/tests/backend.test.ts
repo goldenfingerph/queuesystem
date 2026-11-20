@@ -11,6 +11,7 @@ import { rotateBackups } from '../lib/backup-retention.js';
 import { pruneQueueEvents } from '../lib/queue-event-retention.js';
 import { getBusinessDate } from '../../shared/business-date.js';
 import { isSupportedBackupFilename, resolveSafeBackupPath } from '../lib/backup-validation.js';
+import { validateBackup } from '../lib/restore-validation.js';
 import { createReportPdf, createReportXlsx, shapeArabicForPdf } from '../lib/report-export.js';
 
 function readStoredZipEntry(archive: Buffer, requestedName: string): Buffer | null {
@@ -101,6 +102,89 @@ test('restore path resolution rejects missing files and symlink escapes', (t) =>
       'a backup symlink must not allow restoring a file outside the backup directory');
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+
+test('restore validation rejects corrupt and incomplete backups before live database changes', () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'queuesystem-restore-validation-'));
+  const livePath = path.join(directory, 'live.db');
+  const validPath = path.join(directory, 'valid.db');
+  const missingTablePath = path.join(directory, 'missing-table.db');
+  const missingMigrationPath = path.join(directory, 'missing-migration.db');
+  const corruptPath = path.join(directory, 'corrupt.db');
+  const requiredTables = [
+    'users', 'services', 'counters', 'counter_services', 'staff_assignments',
+    'tickets', 'queue_events', 'system_settings', 'ads', 'backups',
+    'sessions', 'visitor_categories', 'ticket_sequences', 'schema_migrations',
+  ];
+  const createSchema = (database: Database.Database, omitTable?: string) => {
+    for (const table of requiredTables) {
+      if (table === omitTable) continue;
+      if (table === 'schema_migrations') {
+        database.exec('CREATE TABLE schema_migrations (filename TEXT PRIMARY KEY)');
+      } else {
+        database.exec(`CREATE TABLE "${table}" (id INTEGER PRIMARY KEY)`);
+      }
+    }
+  };
+  try {
+    const live = new Database(livePath);
+    live.exec('CREATE TABLE live_marker (value TEXT NOT NULL); INSERT INTO live_marker VALUES ("original-live-database");');
+    live.close();
+
+    const valid = new Database(validPath);
+    createSchema(valid);
+    valid.prepare('INSERT INTO schema_migrations (filename) VALUES (?)').run('001_initial_schema.sql');
+    valid.prepare('INSERT INTO schema_migrations (filename) VALUES (?)').run('002_auth_priority.sql');
+    assert.doesNotThrow(() => validateBackup(valid));
+    valid.close();
+
+    const missingTable = new Database(missingTablePath);
+    createSchema(missingTable, 'tickets');
+    missingTable.prepare('INSERT INTO schema_migrations (filename) VALUES (?)').run('001_initial_schema.sql');
+    missingTable.prepare('INSERT INTO schema_migrations (filename) VALUES (?)').run('002_auth_priority.sql');
+    assert.throws(() => validateBackup(missingTable), /missing tables: tickets/);
+    missingTable.close();
+
+    const missingMigration = new Database(missingMigrationPath);
+    createSchema(missingMigration);
+    missingMigration.prepare('INSERT INTO schema_migrations (filename) VALUES (?)').run('001_initial_schema.sql');
+    assert.throws(() => validateBackup(missingMigration), /002_auth_priority\.sql/);
+    missingMigration.close();
+
+    fs.writeFileSync(corruptPath, 'this is not a SQLite database');
+    assert.throws(() => {
+      const corrupt = new Database(corruptPath, { readonly: true, fileMustExist: true });
+      try {
+        validateBackup(corrupt);
+      } finally {
+        corrupt.close();
+      }
+    }, /SQLite|database|file/i);
+
+    // Mirror the restore script's preflight boundary: candidate validation
+    // completes before the live database is opened for backup or replacement.
+    assert.throws(() => {
+      const candidate = new Database(missingTablePath, { readonly: true, fileMustExist: true });
+      try {
+        validateBackup(candidate);
+      } finally {
+        candidate.close();
+      }
+    }, /missing tables/);
+    const unchangedLive = new Database(livePath, { readonly: true, fileMustExist: true });
+    try {
+      assert.equal(
+        (unchangedLive.prepare('SELECT value FROM live_marker').get() as { value: string }).value,
+        'original-live-database',
+        'a rejected candidate must leave the live database unchanged',
+      );
+    } finally {
+      unchangedLive.close();
+    }
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
   }
 });
 
