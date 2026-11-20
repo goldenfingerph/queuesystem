@@ -74,6 +74,9 @@ try {
 } finally {
   live.close();
 }
+// The live database was checkpointed before closing. Remove its now-stale
+// SQLite sidecars so they cannot be attached to the restored database.
+for (const suffix of ['-wal', '-shm']) fs.rmSync(dbPath + suffix, { force: true });
 
 const tempPath = `${dbPath}.restore-tmp`;
 const rollbackPath = `${dbPath}.pre-restore`;
