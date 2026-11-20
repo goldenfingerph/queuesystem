@@ -269,6 +269,25 @@ export function SystemSettingsModule() {
                 ))}
             </div>
           </div>
+
+          {/* Safe Restore Guide */}
+          <div className="surface p-6">
+            <h2 className="mb-3 flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-navy-500"><Upload className="h-4 w-4" /> Database Restore</h2>
+            <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+              <p className="font-semibold">Important: Restore requires the queue server to be stopped.</p>
+              <p className="mt-1">Do not restore while staff are using the system. Restoring replaces the current database with the selected backup.</p>
+            </div>
+            <ol className="mt-4 list-decimal space-y-2 pl-5 text-sm text-navy-700">
+              <li>Download the backup you want to restore from the Backup History above.</li>
+              <li>Make a separate copy of your current database and keep the downloaded backup safe.</li>
+              <li>Stop QueueSystem on the server PC by pressing <strong>CTRL+C</strong> in its server window.</li>
+              <li>Copy the selected <code>.db</code> file into <code>server\\data\\backups</code>.</li>
+              <li>On the QueueSystem installation folder, run <code>RESTORE-INFINITY-BACKUP.bat</code> and enter the exact backup filename.</li>
+              <li>After a successful restore, start QueueSystem again and verify the dashboard, tickets, counters, and reports.</li>
+            </ol>
+            <p className="mt-3 text-xs text-navy-500">The restore utility validates SQLite integrity and the required QueueSystem schema before replacing the live database. It also creates a pre-restore safety backup. If validation fails, the current database is not changed. Keep the server stopped until the restore process finishes.</p>
+            <p className="mt-2 text-xs font-medium text-navy-600">Never rename or delete database files manually while the server is running. If restore reports an error, keep all backup and recovery files and ask an administrator to review them before restarting.</p>
+          </div>
         </div>
 
         {/* Organization Logo */}
