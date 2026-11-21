@@ -141,17 +141,23 @@ test('restore validation rejects corrupt and incomplete backups before live data
     valid.close();
 
     const missingTable = new Database(missingTablePath);
-    createSchema(missingTable, 'tickets');
-    missingTable.prepare('INSERT INTO schema_migrations (filename) VALUES (?)').run('001_initial_schema.sql');
-    missingTable.prepare('INSERT INTO schema_migrations (filename) VALUES (?)').run('002_auth_priority.sql');
-    assert.throws(() => validateBackup(missingTable), /missing tables: tickets/);
-    missingTable.close();
+    try {
+      createSchema(missingTable, 'tickets');
+      missingTable.prepare('INSERT INTO schema_migrations (filename) VALUES (?)').run('001_initial_schema.sql');
+      missingTable.prepare('INSERT INTO schema_migrations (filename) VALUES (?)').run('002_auth_priority.sql');
+      assert.throws(() => validateBackup(missingTable), /missing tables: tickets/);
+    } finally {
+      missingTable.close();
+    }
 
     const missingMigration = new Database(missingMigrationPath);
-    createSchema(missingMigration);
-    missingMigration.prepare('INSERT INTO schema_migrations (filename) VALUES (?)').run('001_initial_schema.sql');
-    assert.throws(() => validateBackup(missingMigration), /002_auth_priority\.sql/);
-    missingMigration.close();
+    try {
+      createSchema(missingMigration);
+      missingMigration.prepare('INSERT INTO schema_migrations (filename) VALUES (?)').run('001_initial_schema.sql');
+      assert.throws(() => validateBackup(missingMigration), /002_auth_priority\\.sql/);
+    } finally {
+      missingMigration.close();
+    }
 
     fs.writeFileSync(corruptPath, 'this is not a SQLite database');
     assert.throws(() => {
