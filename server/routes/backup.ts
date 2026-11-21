@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import fs from 'node:fs';
+import path from 'node:path';
 import { config } from '../config.js';
 import { getDb } from '../db/index.js';
 import { rotateBackups } from '../lib/backup-retention.js';
