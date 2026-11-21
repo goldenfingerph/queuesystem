@@ -129,10 +129,11 @@ test('restore validation rejects corrupt and incomplete backups before live data
     }
   };
   try {
-    const live = new Database(livePath);
-    live.exec('CREATE TABLE live_marker (value TEXT NOT NULL); INSERT INTO live_marker VALUES ("original-live-database");');
-    live.close();
-    const originalLiveBytes = fs.readFileSync(livePath);
+    // Use an opaque sentinel file for the live database boundary. The test is
+    // proving rejected candidates do not mutate it; opening SQLite here adds
+    // Windows file-handle locking noise unrelated to restore validation.
+    const originalLiveBytes = Buffer.from('original-live-database');
+    fs.writeFileSync(livePath, originalLiveBytes);
 
     const valid = new Database(validPath);
     createSchema(valid);
