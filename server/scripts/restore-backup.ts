@@ -4,6 +4,7 @@ import path from 'node:path';
 import { config } from '../config.js';
 import { isSupportedBackupFilename, resolveSafeBackupPath } from '../lib/backup-validation.js';
 import { validateBackup } from '../lib/restore-validation.js';
+import { replaceDatabaseWithRollback } from '../lib/restore-file-swap.js';
 
 function fail(message: string): never {
   console.error(`[restore] ${message}`);
@@ -51,8 +52,6 @@ for (const suffix of ['-wal', '-shm']) fs.rmSync(dbPath + suffix, { force: true 
 const tempPath = `${dbPath}.restore-tmp`;
 const rollbackPath = `${dbPath}.pre-restore`;
 let tempCreated = false;
-let liveMoved = false;
-let restoredInstalled = false;
 try {
   // Re-resolve immediately before copying to reduce the chance of a path
   // being swapped after the initial validation.
@@ -70,29 +69,23 @@ try {
     check.close();
   }
 
-  if (fs.existsSync(rollbackPath)) {
-    throw new Error('A previous restore rollback file already exists; move it aside before retrying.');
-  }
-
-  fs.renameSync(dbPath, rollbackPath);
-  liveMoved = true;
-  fs.renameSync(tempPath, dbPath);
+  // Keep the original database until the restored file passes validation
+  // after installation at its final path. The helper restores the original
+  // automatically if the replacement or final validation fails.
+  replaceDatabaseWithRollback(dbPath, tempPath, rollbackPath, () => {
+    const installed = new Database(dbPath, { readonly: true, fileMustExist: true });
+    try {
+      validateBackup(installed);
+    } finally {
+      installed.close();
+    }
+  });
   tempCreated = false;
-  restoredInstalled = true;
 
-  // Validate the database at its final path before discarding the rollback.
-  const installed = new Database(dbPath, { readonly: true, fileMustExist: true });
-  try {
-    validateBackup(installed);
-  } finally {
-    installed.close();
-  }
-
-  // The previous database remains available as rollback until the restored
-  // database has passed integrity and schema validation.
+  // The previous database remains available as rollback until validation has
+  // passed. A cleanup failure is non-fatal; preserve the rollback for review.
   try {
     fs.rmSync(rollbackPath);
-    liveMoved = false;
   } catch (cleanupError) {
     console.warn('[restore] Restore succeeded, but the rollback file could not be removed:', cleanupError);
     console.warn(`[restore] Keep ${rollbackPath} until it can be safely reviewed.`);
@@ -101,22 +94,10 @@ try {
   console.log(`[restore] Database restored. Previous database safety copy saved as ${safetyName}`);
   console.log('[restore] Start the server again and verify the dashboard and queue.');
 } catch (err) {
-  // If anything fails after the live file was moved, put it back. Never
-  // delete the only rollback copy as part of error cleanup.
-  if (liveMoved && fs.existsSync(rollbackPath)) {
-    try {
-      if (restoredInstalled && fs.existsSync(dbPath)) fs.rmSync(dbPath);
-      fs.renameSync(rollbackPath, dbPath);
-      liveMoved = false;
-      console.error('[restore] The original database was rolled back successfully.');
-    } catch (rollbackError) {
-      console.error('[restore] AUTOMATIC ROLLBACK FAILED. Do not start the server; preserve these files:', {
-        database: dbPath,
-        rollback: rollbackPath,
-        safetyBackup: safetyPath,
-        error: rollbackError,
-      });
-    }
+  // The swap helper already attempted rollback. Never remove the rollback
+  // file here: it may be the only remaining copy of the original database.
+  if (fs.existsSync(rollbackPath)) {
+    console.error('[restore] Preserve the rollback file for recovery:', rollbackPath);
   }
   if (tempCreated) fs.rmSync(tempPath, { force: true });
   console.error('[restore] Restore failed. Check the current database and the safety backup before restarting the server.');
