@@ -186,9 +186,6 @@ test('restore validation rejects corrupt and incomplete backups before live data
       'a rejected candidate must leave the live database file unchanged',
     );
   } finally {
-      unchangedLive.close();
-    }
-  } finally {
     fs.rmSync(directory, { recursive: true, force: true });
   }
 });
