@@ -156,7 +156,7 @@ test('restore validation rejects corrupt and incomplete backups before live data
     try {
       createSchema(missingMigration);
       missingMigration.prepare('INSERT INTO schema_migrations (filename) VALUES (?)').run('001_initial_schema.sql');
-      assert.throws(() => validateBackup(missingMigration), /002_auth_priority\\.sql/);
+      assert.throws(() => validateBackup(missingMigration), /002_auth_priority\.sql/);
     } finally {
       missingMigration.close();
     }
