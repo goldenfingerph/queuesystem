@@ -12,6 +12,7 @@ import { pruneQueueEvents } from '../lib/queue-event-retention.js';
 import { getBusinessDate } from '../../shared/business-date.js';
 import { isSupportedBackupFilename, resolveSafeBackupPath } from '../lib/backup-validation.js';
 import { validateBackup } from '../lib/restore-validation.js';
+import { replaceDatabaseWithRollback } from '../lib/restore-file-swap.js';
 import { createReportPdf, createReportXlsx, shapeArabicForPdf } from '../lib/report-export.js';
 
 function readStoredZipEntry(archive: Buffer, requestedName: string): Buffer | null {
@@ -1126,3 +1127,74 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
     fs.rmSync(directory, { recursive: true, force: true });
   }
 });
+
+
+test('restore swap rolls back the original database when candidate replacement fails', () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'queuesystem-restore-swap-'));
+  const databasePath = path.join(directory, 'live.db');
+  const candidatePath = path.join(directory, 'candidate.db');
+  const rollbackPath = path.join(directory, 'live.db.pre-restore');
+  const original = Buffer.from('original-live-database');
+  const candidate = Buffer.from('restored-candidate-database');
+  fs.writeFileSync(databasePath, original);
+  fs.writeFileSync(candidatePath, candidate);
+
+  let injectedFailure = false;
+  const operations = {
+    exists: (filePath: string) => fs.existsSync(filePath),
+    removeFile: (filePath: string) => fs.rmSync(filePath),
+    renameFile: (from: string, to: string) => {
+      if (from === candidatePath && !injectedFailure) {
+        injectedFailure = true;
+        throw new Error('simulated candidate replacement failure');
+      }
+      fs.renameSync(from, to);
+    },
+  };
+
+  try {
+    assert.throws(
+      () => replaceDatabaseWithRollback(databasePath, candidatePath, rollbackPath, () => {}, operations),
+      /simulated candidate replacement failure/,
+    );
+    assert.deepEqual(fs.readFileSync(databasePath), original,
+      'the original live database must be restored after candidate replacement fails');
+    assert.equal(fs.existsSync(rollbackPath), false,
+      'successful automatic rollback must move the original file back into place');
+    assert.equal(fs.existsSync(candidatePath), true,
+      'the uninstalled candidate should remain available for diagnosis');
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('restore swap rolls back the original database when final validation fails', () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'queuesystem-restore-validation-swap-'));
+  const databasePath = path.join(directory, 'live.db');
+  const candidatePath = path.join(directory, 'candidate.db');
+  const rollbackPath = path.join(directory, 'live.db.pre-restore');
+  const original = Buffer.from('original-live-database');
+  fs.writeFileSync(databasePath, original);
+  fs.writeFileSync(candidatePath, 'invalid-restored-candidate');
+
+  try {
+    assert.throws(
+      () => replaceDatabaseWithRollback(
+        databasePath,
+        candidatePath,
+        rollbackPath,
+        () => { throw new Error('simulated final integrity validation failure'); },
+      ),
+      /simulated final integrity validation failure/,
+    );
+    assert.deepEqual(fs.readFileSync(databasePath), original,
+      'the original live database must be restored when final validation fails');
+    assert.equal(fs.existsSync(rollbackPath), false,
+      'successful rollback must restore the original path');
+    assert.equal(fs.existsSync(candidatePath), false,
+      'the failed installed candidate must be removed');
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
