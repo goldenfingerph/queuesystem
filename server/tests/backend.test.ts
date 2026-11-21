@@ -132,6 +132,7 @@ test('restore validation rejects corrupt and incomplete backups before live data
     const live = new Database(livePath);
     live.exec('CREATE TABLE live_marker (value TEXT NOT NULL); INSERT INTO live_marker VALUES ("original-live-database");');
     live.close();
+    const originalLiveBytes = fs.readFileSync(livePath);
 
     const valid = new Database(validPath);
     createSchema(valid);
@@ -179,14 +180,12 @@ test('restore validation rejects corrupt and incomplete backups before live data
         candidate.close();
       }
     }, /missing tables/);
-    const unchangedLive = new Database(livePath, { readonly: true, fileMustExist: true });
-    try {
-      assert.equal(
-        (unchangedLive.prepare('SELECT value FROM live_marker').get() as { value: string }).value,
-        'original-live-database',
-        'a rejected candidate must leave the live database unchanged',
-      );
-    } finally {
+    assert.deepEqual(
+      fs.readFileSync(livePath),
+      originalLiveBytes,
+      'a rejected candidate must leave the live database file unchanged',
+    );
+  } finally {
       unchangedLive.close();
     }
   } finally {
