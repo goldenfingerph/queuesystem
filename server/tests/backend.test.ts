@@ -304,7 +304,7 @@ test('backup rotation never follows or deletes a symlink target', (t) => {
     assert.equal(fs.readFileSync(outsidePath, 'utf8'), 'outside-sensitive-data');
     assert.equal(fs.lstatSync(linkPath).isSymbolicLink(), true);
     assert.equal(
-      db.prepare('SELECT COUNT(*) AS count FROM backups WHERE filename = ?').get(linkName)?.count,
+      (db.prepare('SELECT COUNT(*) AS count FROM backups WHERE filename = ?').get(linkName) as { count: number }).count,
       1,
       'metadata for a skipped symlink must remain for safe manual review',
     );
