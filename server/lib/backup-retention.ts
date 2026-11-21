@@ -37,7 +37,8 @@ export function rotateBackups(
 
     try {
       if (fs.existsSync(filePath)) {
-        if (!fs.statSync(filePath).isFile()) continue;
+        const stats = fs.lstatSync(filePath);
+        if (stats.isSymbolicLink() || !stats.isFile()) continue;
         fs.rmSync(filePath);
       }
       db.prepare('DELETE FROM backups WHERE id = ?').run(record.id);
