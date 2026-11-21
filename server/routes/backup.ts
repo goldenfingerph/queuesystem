@@ -1,10 +1,10 @@
 import { Router } from 'express';
 import fs from 'node:fs';
-import path from 'node:path';
 import { config } from '../config.js';
 import { getDb } from '../db/index.js';
 import { rotateBackups } from '../lib/backup-retention.js';
 import { writeAuditLog } from '../lib/audit-log.js';
+import { resolveSafeBackupPath } from '../lib/backup-validation.js';
 
 const BACKUP_RETENTION_COUNT = 30;
 
@@ -54,11 +54,13 @@ export function backupRouter(): Router {
     const id = Number(req.params.id);
     if (!Number.isInteger(id) || id < 1) { res.status(400).json({ error: 'Invalid backup ID' }); return; }
     const row = getDb().prepare('SELECT filename FROM backups WHERE id = ?').get(id) as { filename: string } | undefined;
-    if (!row || path.basename(row.filename) !== row.filename || !/^(?:queuesystem|infinity)-backup-[\dTZ-]+\.db$/.test(row.filename)) {
+    if (!row) {
       res.status(404).json({ error: 'Backup not found' }); return;
     }
-    const file = path.resolve(config.backupsDir, row.filename);
-    if (!file.startsWith(path.resolve(config.backupsDir) + path.sep) || !fs.existsSync(file) || !fs.statSync(file).isFile()) {
+    // Use the same real-path and symlink protections as restore. A backup
+    // metadata row must never make an external file downloadable.
+    const file = resolveSafeBackupPath(config.backupsDir, row.filename);
+    if (!file) {
       res.status(404).json({ error: 'Backup file not found' }); return;
     }
     writeAuditLog(getDb(), {
