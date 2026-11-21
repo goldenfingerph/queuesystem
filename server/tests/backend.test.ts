@@ -272,6 +272,48 @@ test('backup rotation keeps newest regular backups and preserves restore safety 
   }
 });
 
+test('backup rotation never follows or deletes a symlink target', (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'queuesystem-backup-symlink-retention-'));
+  const outsidePath = path.join(directory, 'outside.db');
+  const linkName = 'queuesystem-backup-2026-11-01T00-00-00-000Z.db';
+  const linkPath = path.join(directory, linkName);
+  const db = new Database(':memory:');
+  try {
+    fs.writeFileSync(outsidePath, 'outside-sensitive-data');
+    try {
+      fs.symlinkSync(outsidePath, linkPath, 'file');
+    } catch (error) {
+      t.skip(`Symlink creation is unavailable on this runner: ${error instanceof Error ? error.message : String(error)}`);
+      return;
+    }
+    db.exec(`
+      CREATE TABLE backups (
+        id INTEGER PRIMARY KEY,
+        filename TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      );
+    `);
+    const insert = db.prepare('INSERT INTO backups (filename, created_at) VALUES (?, ?)');
+    insert.run(linkName, '2026-11-01 00:00:00');
+    const newestName = 'queuesystem-backup-2026-11-02T00-00-00-000Z.db';
+    fs.writeFileSync(path.join(directory, newestName), 'newest-backup');
+    insert.run(newestName, '2026-11-02 00:00:00');
+
+    assert.equal(rotateBackups(db, directory, 1), 0,
+      'rotation must skip a symlink instead of deleting its target or metadata');
+    assert.equal(fs.readFileSync(outsidePath, 'utf8'), 'outside-sensitive-data');
+    assert.equal(fs.lstatSync(linkPath).isSymbolicLink(), true);
+    assert.equal(
+      db.prepare('SELECT COUNT(*) AS count FROM backups WHERE filename = ?').get(linkName)?.count,
+      1,
+      'metadata for a skipped symlink must remain for safe manual review',
+    );
+  } finally {
+    db.close();
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test('business date supports company timezones and configurable rollover while preserving UAE defaults', () => {
   assert.equal(getBusinessDate(new Date('2026-11-08T01:59:59.000Z')), '2026-11-07', 'UAE default: before 06:00 remains previous day');
   assert.equal(getBusinessDate(new Date('2026-11-08T02:00:00.000Z')), '2026-11-08', 'UAE default: 06:00 starts new day');
