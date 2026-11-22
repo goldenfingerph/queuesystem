@@ -52,7 +52,7 @@ export function QueueSettingsModule() {
     setSaving(true);
     setSavedMsg('');
     try {
-      const supportedSettings = Object.fromEntries(Object.entries(settings).filter(([key]) => key !== 'priority_order'));
+      const supportedSettings = Object.fromEntries(Object.entries(settings).filter(([key]) => ['ticket_padding', 'queue_mode'].includes(key)));
       await api.put('/settings', { settings: supportedSettings });
       await Promise.all(categories.map((c) => saveCategory(c)));
       setSavedMsg('All settings saved successfully');
