@@ -1087,7 +1087,7 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
       services: { id: number; code: string; assigned_counters: number }[];
     };
     assert.ok(serviceListData.services.some((service) => service.id === sourceService && service.assigned_counters === 1));
-    assert.ok(serviceListData.services.some((service) => service.id === targetService && service.assigned_counters === 1));
+    assert.ok(serviceListData.services.some((service) => service.id === targetService && service.assigned_counters === 2));
 
     const createServiceResponse = await fetch(`http://127.0.0.1:${address.port}/api/services`, {
       method: 'POST',
