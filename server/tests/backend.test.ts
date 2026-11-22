@@ -412,7 +412,7 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
     ).run(userId, sourceCounter);
 
     const ticketResult = db.prepare(
-      "INSERT INTO tickets (number, service_id, status, priority, queued_for_counter_id, business_date) VALUES ('1001', ?, 'waiting', 'normal', ?, '2026-11-08')",
+      "INSERT INTO tickets (number, service_id, status, priority, queued_for_counter_id, business_date, created_at) VALUES ('1001', ?, 'waiting', 'normal', ?, '2026-11-08', '2026-11-08 07:00:00')",
     ).run(sourceService, sourceCounter);
     const ticketId = Number(ticketResult.lastInsertRowid);
     db.prepare(
