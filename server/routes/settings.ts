@@ -14,7 +14,7 @@ export function settingsRouter(): Router {
     res.json({ settings });
   });
 
-  router.put('/', requireRole('admin'), (req, res) => {
+  router.put('/', requireRole('admin', 'senior_clerk'), (req, res) => {
     const { settings } = req.body ?? {};
     if (!settings || typeof settings !== 'object' || Array.isArray(settings)) {
       res.status(400).json({ error: 'settings object required' });
@@ -24,6 +24,10 @@ export function settingsRouter(): Router {
     const entries = Object.entries(settings);
     if (entries.some(([key, value]) => !allowedKeys.has(key) || !['string', 'number', 'boolean'].includes(typeof value))) {
       res.status(400).json({ error: 'One or more settings are invalid or unsupported' }); return;
+    }
+    const seniorClerkSettings = new Set(['ticket_padding', 'queue_mode']);
+    if (req.user?.role === 'senior_clerk' && entries.some(([key]) => !seniorClerkSettings.has(key))) {
+      res.status(403).json({ error: 'Senior clerks may only change queue mode and ticket numbering settings' }); return;
     }
     const numericInRange = (value: unknown, min: number, max: number) =>
       (typeof value === 'number' || (typeof value === 'string' && value.trim() !== '')) &&
@@ -91,7 +95,7 @@ export function settingsRouter(): Router {
     res.json({ categories: rows });
   });
 
-  router.put('/visitor-categories/:id', requireRole('admin'), (req, res) => {
+  router.put('/visitor-categories/:id', requireRole('admin', 'senior_clerk'), (req, res) => {
     const { id } = req.params;
     const { label_en, label_ar, priority_rank, is_active, sort_order } = req.body ?? {};
     if (!Number.isInteger(Number(id)) || Number(id) < 1) { res.status(400).json({ error: 'Invalid category ID' }); return; }
