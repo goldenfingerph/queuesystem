@@ -33,7 +33,7 @@ export function ticketsRouter(): Router {
   };
 
   // List tickets with filters
-  router.get('/', (req, res) => {
+  router.get('/', requireRole('admin', 'senior_clerk'), (req, res) => {
     const db = getDb();
     const status = typeof req.query.status === 'string' ? req.query.status : undefined;
     const serviceId = typeof req.query.serviceId === 'string' ? req.query.serviceId : undefined;
@@ -111,7 +111,7 @@ export function ticketsRouter(): Router {
   });
 
   // Generate a new ticket (reception)
-  router.post('/', requireRole('admin', 'senior_clerk', 'receptionist'), (req, res) => {
+  router.post('/', requireRole('admin', 'receptionist'), (req, res) => {
     const { service_id, visitor_category_id } = req.body ?? {};
     if (!Number.isInteger(Number(service_id)) || Number(service_id) < 1) {
       res.status(400).json({ error: 'A valid service ID is required' });
