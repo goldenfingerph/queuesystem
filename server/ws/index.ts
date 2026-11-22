@@ -12,7 +12,11 @@ export function isAllowedWebSocketOrigin(origin: string | undefined, host: strin
   try {
     const parsed = new URL(origin);
     const expectedProtocol = secure ? 'https:' : 'http:';
-    return parsed.protocol === expectedProtocol && parsed.host.toLowerCase() === host.toLowerCase();
+    // A browser Origin is a serialized origin, not an arbitrary URL. Reject
+    // credentials, paths, queries, and fragments rather than trusting only
+    // the URL's host component.
+    return parsed.origin === origin && parsed.username === '' && parsed.password === '' &&
+      parsed.protocol === expectedProtocol && parsed.host.toLowerCase() === host.toLowerCase();
   } catch {
     return false;
   }
