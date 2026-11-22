@@ -24,16 +24,33 @@ function Test-QueueServer {
       return $true
     }
     $r = Invoke-WebRequest -Uri "$serverUrl/health" -UseBasicParsing -TimeoutSec 3
-    return $r.StatusCode -ge 200 -and $r.StatusCode -lt 500
+    return $r.StatusCode -eq 200
   } catch { return $false }
 }
 function Start-QueueServer {
-  if (-not (Test-Path $nodePath) -or -not (Test-Path $tsxPath)) { Write-Log 'ERROR: Bundled Node.js runtime or tsx entry is missing.'; return }
+  if (-not (Test-Path $nodePath) -or -not (Test-Path $tsxPath)) { Write-Log 'ERROR: Bundled Node.js runtime or tsx entry is missing.'; return $null }
   $stdout=Join-Path $logDirectory 'Server-stdout.log'; $stderr=Join-Path $logDirectory 'Server-stderr.log'
   $env:PATH="$(Split-Path -Parent $nodePath);$env:PATH"
   if ($useTls) { $env:TLS_CERT_FILE=$certPath; $env:TLS_KEY_FILE=$keyPath } else { Remove-Item Env:TLS_CERT_FILE,Env:TLS_KEY_FILE -ErrorAction SilentlyContinue }
   Write-Log 'Starting QueueSystem server process.'
-  Start-Process -FilePath $nodePath -ArgumentList @($tsxPath,'server/index.ts') -WorkingDirectory $installRoot -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr | Out-Null
+  $process = Start-Process -FilePath $nodePath -ArgumentList @($tsxPath,'server/index.ts') -WorkingDirectory $installRoot -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
+  $script:queueServerProcess = $process
+  Write-Log "QueueSystem server process started with PID $($process.Id)."
+  return $process
+}
+function Stop-StuckQueueServer {
+  $process = $script:queueServerProcess
+  if ($null -ne $process) {
+    try {
+      $process.Refresh()
+      if (-not $process.HasExited) {
+        Write-Log "Server process PID $($process.Id) did not become healthy; stopping it before retry."
+        Stop-Process -Id $process.Id -Force -ErrorAction Stop
+        $process.WaitForExit(10000) | Out-Null
+      }
+    } catch { Write-Log "WARNING: Could not stop stalled server process: $($_.Exception.Message)" }
+    $script:queueServerProcess = $null
+  }
 }
 function Find-Chrome {
   $candidates=@(
@@ -59,10 +76,31 @@ Write-Log 'QueueSystem kiosk watchdog started after Windows sign-in.'
 while ($true) {
   try {
     if (-not (Test-QueueServer)) {
-      Write-Log 'Queue server is not responding; attempting to start it.'
-      Start-QueueServer
-      for ($i=0;$i -lt 45;$i++) { Start-Sleep -Seconds 2; if (Test-QueueServer) { break } }
-      if (-not (Test-QueueServer)) { Write-Log 'WARNING: Server not healthy after 90 seconds; retrying.'; Start-Sleep -Seconds 15; continue }
+      if ($null -ne $script:queueServerProcess) {
+        $script:queueServerProcess.Refresh()
+        if (-not $script:queueServerProcess.HasExited) {
+          Write-Log "Server process PID $($script:queueServerProcess.Id) is still running but health check failed; waiting before retry."
+          Start-Sleep -Seconds 15
+          continue
+        }
+        Write-Log "QueueSystem server process exited with code $($script:queueServerProcess.ExitCode); restarting it."
+        $script:queueServerProcess = $null
+      } else {
+        Write-Log 'Queue server is not responding; attempting to start it.'
+      }
+      $startedProcess = Start-QueueServer
+      if ($null -eq $startedProcess) { Start-Sleep -Seconds 30; continue }
+      for ($i=0;$i -lt 45;$i++) {
+        Start-Sleep -Seconds 2
+        $startedProcess.Refresh()
+        if ($startedProcess.HasExited -or (Test-QueueServer)) { break }
+      }
+      if (-not (Test-QueueServer)) {
+        Stop-StuckQueueServer
+        Write-Log 'WARNING: Server did not become healthy within 90 seconds; retrying in 15 seconds.'
+        Start-Sleep -Seconds 15
+        continue
+      }
       Write-Log 'Queue server health check passed.'
     }
     $kioskProcesses = Get-CimInstance Win32_Process -Filter "Name='chrome.exe' OR Name='msedge.exe'" -ErrorAction SilentlyContinue |
