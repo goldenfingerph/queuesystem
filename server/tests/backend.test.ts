@@ -426,6 +426,16 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
     ).run(ticketId);
 
     const token = middleware.createSession(userId);
+    const seniorClerkId = Number(db.prepare(
+      "INSERT INTO users (username, password_hash, display_name, role, is_active) VALUES ('report-senior-clerk', 'test-hash', 'Report Senior Clerk', 'senior_clerk', 1)",
+    ).run().lastInsertRowid);
+    const seniorClerkToken = middleware.createSession(seniorClerkId);
+    const receptionistId = Number(db.prepare(
+      "INSERT INTO users (username, password_hash, display_name, role, is_active) VALUES ('report-receptionist', 'test-hash', 'Report Receptionist', 'receptionist', 1)",
+    ).run().lastInsertRowid);
+    const receptionistToken = middleware.createSession(receptionistId);
+    const adminId = (db.prepare("SELECT id FROM users WHERE role = 'admin' AND is_active = 1 ORDER BY id LIMIT 1").get() as { id: number }).id;
+    const adminToken = middleware.createSession(adminId);
     const storedSession = db.prepare('SELECT token FROM sessions WHERE user_id = ?').get(userId) as { token: string };
     assert.equal(storedSession.token, auth.hashToken(token), 'SQLite must store only the token digest');
     server = http.createServer(createApp());
@@ -464,6 +474,23 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
       body: JSON.stringify({ service_id: sourceService }),
     });
     assert.equal(anonymousTicketCreate.status, 401, 'ticket creation must require a receptionist/staff session');
+
+    // Reports are confidential management data: only admin and senior clerk
+    // roles may access dashboards, analytics, daily reports, or exports.
+    for (const restrictedToken of [token, receptionistToken]) {
+      for (const endpoint of ['/api/reports/dashboard', '/api/reports/analytics?from=2026-11-08&to=2026-11-08', '/api/reports/export?date=2026-11-08']) {
+        const denied = await fetch(`http://127.0.0.1:${address.port}${endpoint}`, {
+          headers: { authorization: `Bearer ${restrictedToken}` },
+        });
+        assert.equal(denied.status, 403, `${endpoint} must reject service officers and receptionists`);
+      }
+    }
+    for (const authorizedToken of [seniorClerkToken, adminToken]) {
+      const allowed = await fetch(`http://127.0.0.1:${address.port}/api/reports/dashboard`, {
+        headers: { authorization: `Bearer ${authorizedToken}` },
+      });
+      assert.equal(allowed.status, 200, 'admin and senior clerk roles must retain report access');
+    }
     const publicServices = await fetch(`http://127.0.0.1:${address.port}/api/services`);
     assert.equal(publicServices.status, 200, 'the reception service catalogue must remain public');
     const publicTvQueue = await fetch(`http://127.0.0.1:${address.port}/api/tv/queue`);
@@ -542,7 +569,7 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
     assert.equal(invalidHistoryDate.status, 400, 'invalid calendar dates must be rejected');
 
     const analyticsResponse = await fetch(`http://127.0.0.1:${address.port}/api/reports/analytics?from=2026-11-08&to=2026-11-08`, {
-      headers: { authorization: `Bearer ${token}` },
+      headers: { authorization: `Bearer ${seniorClerkToken}` },
     });
     assert.equal(analyticsResponse.status, 200, await analyticsResponse.clone().text());
     const analytics = await analyticsResponse.json() as {
@@ -562,7 +589,7 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
     assert.ok(analytics.hourly.some((bucket) => bucket.hour === 13 && bucket.total === 1), `Unexpected company-local hourly analytics buckets: ${JSON.stringify(analytics.hourly)}`);
 
     const pdfExport = await fetch(`http://127.0.0.1:${address.port}/api/reports/export.pdf?date=2026-11-08`, {
-      headers: { authorization: `Bearer ${token}` },
+      headers: { authorization: `Bearer ${seniorClerkToken}` },
     });
     assert.equal(pdfExport.status, 200, await pdfExport.clone().text());
     assert.match(pdfExport.headers.get('content-type') ?? '', /application\/pdf/);
@@ -576,7 +603,7 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
     assert.ok(pdfBytes.includes(Buffer.from('/ToUnicode')), 'API PDF must include Unicode mappings for report text');
 
     const excelExport = await fetch(`http://127.0.0.1:${address.port}/api/reports/export.xlsx?date=2026-11-08`, {
-      headers: { authorization: `Bearer ${token}` },
+      headers: { authorization: `Bearer ${seniorClerkToken}` },
     });
     assert.equal(excelExport.status, 200, await excelExport.clone().text());
     assert.match(excelExport.headers.get('content-type') ?? '', /spreadsheetml\.sheet/);
@@ -599,41 +626,41 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
     // PDF validity and embedded Unicode font mappings are asserted above.
 
     const invalidPdfExport = await fetch(`http://127.0.0.1:${address.port}/api/reports/export.pdf?date=2026-02-30`, {
-      headers: { authorization: `Bearer ${token}` },
+      headers: { authorization: `Bearer ${seniorClerkToken}` },
     });
     assert.equal(invalidPdfExport.status, 400);
 
     const reversedAnalyticsRange = await fetch(`http://127.0.0.1:${address.port}/api/reports/analytics?from=2026-11-09&to=2026-11-08`, {
-      headers: { authorization: `Bearer ${token}` },
+      headers: { authorization: `Bearer ${seniorClerkToken}` },
     });
     assert.equal(reversedAnalyticsRange.status, 400);
     const oversizedAnalyticsRange = await fetch(`http://127.0.0.1:${address.port}/api/reports/analytics?from=2026-01-01&to=2026-04-01`, {
-      headers: { authorization: `Bearer ${token}` },
+      headers: { authorization: `Bearer ${seniorClerkToken}` },
     });
     assert.equal(oversizedAnalyticsRange.status, 400);
     const invalidAnalyticsDate = await fetch(`http://127.0.0.1:${address.port}/api/reports/analytics?from=2026-02-30&to=2026-03-01`, {
-      headers: { authorization: `Bearer ${token}` },
+      headers: { authorization: `Bearer ${seniorClerkToken}` },
     });
     assert.equal(invalidAnalyticsDate.status, 400);
     const invalidAnalyticsService = await fetch(`http://127.0.0.1:${address.port}/api/reports/analytics?from=2026-11-08&to=2026-11-08&serviceId=invalid`, {
-      headers: { authorization: `Bearer ${token}` },
+      headers: { authorization: `Bearer ${seniorClerkToken}` },
     });
     assert.equal(invalidAnalyticsService.status, 400);
 
     const invalidDailyReportDate = await fetch('http://127.0.0.1:' + address.port + '/api/reports?date=2026-02-30', {
-      headers: { authorization: 'Bearer ' + token },
+      headers: { authorization: 'Bearer ' + seniorClerkToken },
     });
     assert.equal(invalidDailyReportDate.status, 400, 'daily reports must reject impossible calendar dates');
     const invalidDailyReportService = await fetch('http://127.0.0.1:' + address.port + '/api/reports?date=2026-11-08&serviceId=invalid', {
-      headers: { authorization: 'Bearer ' + token },
+      headers: { authorization: 'Bearer ' + seniorClerkToken },
     });
     assert.equal(invalidDailyReportService.status, 400, 'daily reports must reject invalid service IDs');
     const invalidExportDate = await fetch('http://127.0.0.1:' + address.port + '/api/reports/export?date=2026-02-30', {
-      headers: { authorization: 'Bearer ' + token },
+      headers: { authorization: 'Bearer ' + seniorClerkToken },
     });
     assert.equal(invalidExportDate.status, 400, 'CSV export must reject impossible calendar dates');
     const invalidExportService = await fetch('http://127.0.0.1:' + address.port + '/api/reports/export?date=2026-11-08&serviceId=invalid', {
-      headers: { authorization: 'Bearer ' + token },
+      headers: { authorization: 'Bearer ' + seniorClerkToken },
     });
     assert.equal(invalidExportService.status, 400, 'CSV export must reject invalid service IDs');
 
