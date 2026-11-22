@@ -44,6 +44,22 @@ foreach ($feature in $requiredWatchdogFeatures) {
   }
 }
 
+$crashRecoveryRequirements = @(
+  '-PassThru',
+  '$script:queueServerProcess = $process',
+  '$script:queueServerProcess.HasExited',
+  'Stop-StuckQueueServer',
+  'Stop-Process -Id $process.Id -Force',
+  'did not become healthy within 90 seconds',
+  'return $r.StatusCode -eq 200'
+)
+foreach ($requirement in $crashRecoveryRequirements) {
+  if (-not $watchdog.Contains($requirement)) {
+    throw "QueueSystem crash-recovery watchdog is missing required safeguard: $requirement"
+  }
+}
+
 Write-Host 'PASS: Windows sign-in startup shortcut points to the hidden watchdog.'
+Write-Host 'PASS: watchdog detects exited server processes, restarts them, and stops a stalled child before retrying.'
 Write-Host 'PASS: watchdog can launch the server, check health, retry, and open the TV in kiosk mode.'
 Write-Host 'NOTE: actual Windows sign-in and power-recovery behavior still requires testing on the target PC.'
