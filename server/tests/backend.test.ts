@@ -452,6 +452,25 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
     assert.match(await iconResponse.text(), /<svg/);
     assert.equal(pageResponse.status, 200);
     assert.match(await pageResponse.text(), /rel="manifest"/);
+    // Private queue and reporting APIs must reject anonymous access, while the
+    // public service catalogue and TV projection remain intentionally readable.
+    for (const endpoint of ['/api/tickets', '/api/counters', '/api/reports', '/api/staff']) {
+      const response = await fetch(`http://127.0.0.1:${address.port}${endpoint}`);
+      assert.equal(response.status, 401, `${endpoint} must require authentication`);
+    }
+    const anonymousTicketCreate = await fetch(`http://127.0.0.1:${address.port}/api/tickets`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ service_id: sourceService }),
+    });
+    assert.equal(anonymousTicketCreate.status, 401, 'ticket creation must require a receptionist/staff session');
+    const publicServices = await fetch(`http://127.0.0.1:${address.port}/api/services`);
+    assert.equal(publicServices.status, 200, 'the reception service catalogue must remain public');
+    const publicTvQueue = await fetch(`http://127.0.0.1:${address.port}/api/tv/queue`);
+    assert.equal(publicTvQueue.status, 200, 'the TV queue projection must remain public');
+    assert.equal(JSON.stringify(await publicTvQueue.json()).includes('visitor@example.com'), false,
+      'the public TV projection must not expose visitor contact details');
+
     // Existing pre-upgrade raw sessions remain valid and are hashed on first use.
     const legacyToken = 'a'.repeat(64);
     db.prepare('INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)').run(legacyToken, userId, auth.sessionExpiry());
@@ -826,6 +845,52 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
     });
     assert.equal(duplicateCallNext.status, 409,
       'a counter with an active called ticket must not call a second ticket');
+
+    const recallResponse = await fetch(`http://127.0.0.1:${address.port}/api/tickets/recall`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${adminToken}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ ticket_id: ticketId }),
+    });
+    assert.equal(recallResponse.status, 200, await recallResponse.text());
+    assert.equal((db.prepare('SELECT status FROM tickets WHERE id = ?').get(ticketId) as { status: string }).status, 'called',
+      'recall must keep the ticket in called state');
+
+    const startServingResponse = await fetch(`http://127.0.0.1:${address.port}/api/tickets/start-serving`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${adminToken}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ ticket_id: ticketId }),
+    });
+    assert.equal(startServingResponse.status, 200, await startServingResponse.text());
+    assert.equal((db.prepare('SELECT status FROM tickets WHERE id = ?').get(ticketId) as { status: string }).status, 'serving',
+      'start-serving must transition the ticket from called to serving');
+
+    const completeResponse = await fetch(`http://127.0.0.1:${address.port}/api/tickets/complete`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${adminToken}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ ticket_id: ticketId }),
+    });
+    assert.equal(completeResponse.status, 200, await completeResponse.text());
+    const completedTicket = db.prepare('SELECT status, counter_id, completed_at FROM tickets WHERE id = ?').get(ticketId) as {
+      status: string; counter_id: number | null; completed_at: string | null;
+    };
+    assert.equal(completedTicket.status, 'completed');
+    assert.equal(completedTicket.counter_id, targetCounter);
+    assert.ok(completedTicket.completed_at, 'completion timestamp must be stored');
+
+    const duplicateCompleteResponse = await fetch(`http://127.0.0.1:${address.port}/api/tickets/complete`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${adminToken}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ ticket_id: ticketId }),
+    });
+    assert.equal(duplicateCompleteResponse.status, 409, 'a completed ticket must not be completed twice');
+    const workflowEvents = db.prepare(
+      'SELECT event_type, from_status, to_status FROM queue_events WHERE ticket_id = ? ORDER BY id',
+    ).all(ticketId) as { event_type: string; from_status: string | null; to_status: string | null }[];
+    assert.deepEqual(workflowEvents.map((event) => event.event_type), ['created', 'transferred', 'called', 'recalled', 'started', 'completed']);
+    assert.deepEqual(workflowEvents.slice(-3).map((event) => [event.from_status, event.to_status]), [
+      ['waiting', 'called'], ['called', 'called'], ['called', 'serving'],
+    ]);
+    assert.deepEqual(workflowEvents.slice(-1).map((event) => [event.from_status, event.to_status]), [['serving', 'completed']]);
 
     const settingsAuditResponse = await fetch(`http://127.0.0.1:${address.port}/api/settings`, {
       method: 'PUT',
