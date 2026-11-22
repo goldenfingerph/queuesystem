@@ -60,10 +60,10 @@ export function createApp(): Express {
 
   // Public read-only data needed by the welcome/reception screens and TV.
   // Every mutation remains protected by a valid staff session.
-  app.use('/api/services', protectUnlessGet, servicesRouter());
+  app.use('/api/services', protectUnlessGet(), servicesRouter());
   app.use('/api/settings', protectUnlessGet('admin', 'senior_clerk'), settingsRouter());
-  app.use('/api/logo', protectUnlessGet, logoManageRouter());
-  app.use('/api/ads', protectUnlessGet, adsManageRouter());
+  app.use('/api/logo', protectUnlessGet(), logoManageRouter());
+  app.use('/api/ads', protectUnlessGet(), adsManageRouter());
 
   // Public TV projection deliberately excludes visitor names/contact details.
   app.get('/api/tv/queue', (_req, res) => {
