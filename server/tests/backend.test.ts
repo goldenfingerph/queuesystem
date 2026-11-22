@@ -780,6 +780,25 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
     const admin = db.prepare("SELECT id FROM users WHERE username = 'admin'").get() as { id: number };
     const adminToken = middleware.createSession(admin.id);
 
+    // A transferred waiting ticket is still pinned to the target counter.
+    // Disabling or deleting that counter must not silently unpin the ticket.
+    const disableResponse = await fetch(`http://127.0.0.1:${address.port}/api/counters/${targetCounter}`, {
+      method: 'PUT',
+      headers: {
+        authorization: `Bearer ${adminToken}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ is_active: false }),
+    });
+    assert.equal(disableResponse.status, 409, await disableResponse.text());
+
+    const deleteResponse = await fetch(`http://127.0.0.1:${address.port}/api/counters/${targetCounter}`, {
+      method: 'DELETE',
+      headers: { authorization: `Bearer ${adminToken}` },
+    });
+    assert.equal(deleteResponse.status, 409, await deleteResponse.text());
+    assert.ok(db.prepare('SELECT id FROM counters WHERE id = ?').get(targetCounter));
+
     const officerBackupList = await fetch(`http://127.0.0.1:${address.port}/api/backups`, {
       headers: { authorization: `Bearer ${token}` },
     });
@@ -1141,24 +1160,6 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
       assert.equal(hasSupportedFileSignature(target, kind, extension), expected, name);
     }
 
-    // A transferred waiting ticket is still pinned to the target counter.
-    // Disabling or deleting that counter must not silently unpin the ticket.
-    const disableResponse = await fetch(`http://127.0.0.1:${address.port}/api/counters/${targetCounter}`, {
-      method: 'PUT',
-      headers: {
-        authorization: `Bearer ${adminToken}`,
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({ is_active: false }),
-    });
-    assert.equal(disableResponse.status, 409, await disableResponse.text());
-
-    const deleteResponse = await fetch(`http://127.0.0.1:${address.port}/api/counters/${targetCounter}`, {
-      method: 'DELETE',
-      headers: { authorization: `Bearer ${adminToken}` },
-    });
-    assert.equal(deleteResponse.status, 409, await deleteResponse.text());
-    assert.ok(db.prepare('SELECT id FROM counters WHERE id = ?').get(targetCounter));
 
     // Changing a service officer to a non-service-officer role must release
     // their counter assignment so it cannot remain orphaned or block reuse.
