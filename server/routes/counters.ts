@@ -25,7 +25,7 @@ export function countersRouter(): Router {
     res.json({ counters });
   });
 
-  router.post('/', requireRole('admin'), (req, res) => {
+  router.post('/', requireRole('admin', 'senior_clerk'), (req, res) => {
     const { number, name } = req.body ?? {};
     if (!Number.isInteger(Number(number)) || Number(number) < 1 || typeof name !== 'string' || !name.trim() || name.trim().length > 60) {
       res.status(400).json({ error: 'Number and name are required' });
@@ -51,7 +51,7 @@ export function countersRouter(): Router {
     }
   });
 
-  router.put('/:id', requireRole('admin'), (req, res) => {
+  router.put('/:id', requireRole('admin', 'senior_clerk'), (req, res) => {
     const { id } = req.params;
     const { number, name, is_active } = req.body ?? {};
     if (!Number.isInteger(Number(id)) || Number(id) < 1) { res.status(400).json({ error: 'Invalid counter ID' }); return; }
@@ -105,7 +105,7 @@ export function countersRouter(): Router {
     }
   });
 
-  router.delete('/:id', requireRole('admin'), (req, res) => {
+  router.delete('/:id', requireRole('admin', 'senior_clerk'), (req, res) => {
     const { id } = req.params;
     const db = getDb();
     if (!Number.isInteger(Number(id)) || Number(id) < 1) { res.status(400).json({ error: 'Invalid counter ID' }); return; }
@@ -139,7 +139,7 @@ export function countersRouter(): Router {
   });
 
   // Assign services to a counter (replaces all)
-  router.put('/:id/services', requireRole('admin'), (req, res) => {
+  router.put('/:id/services', requireRole('admin', 'senior_clerk'), (req, res) => {
     const { id } = req.params;
     const { serviceIds } = req.body ?? {};
     if (!Array.isArray(serviceIds) || serviceIds.length > 200) { res.status(400).json({ error: 'serviceIds must be an array of at most 200 items' }); return; }
