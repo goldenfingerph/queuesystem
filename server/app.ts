@@ -114,7 +114,7 @@ export function createApp(): Express {
   app.use('/api/tickets', authMiddleware, ticketsRouter());
   app.use('/api/counters', authMiddleware, countersRouter());
   app.use('/api/staff', authMiddleware, requireRole('admin'), staffRouter());
-  app.use('/api/reports', authMiddleware, reportsRouter());
+  app.use('/api/reports', authMiddleware, requireRole('admin', 'senior_clerk'), reportsRouter());
 
   // Keep the catch-all admin API protection after the explicitly public routes.
   app.use('/api', authMiddleware, requireRole('admin'), backupRouter());
