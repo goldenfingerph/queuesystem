@@ -1062,7 +1062,7 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
     const workflowEvents = db.prepare(
       'SELECT event_type, from_status, to_status FROM queue_events WHERE ticket_id = ? ORDER BY id',
     ).all(ticketId) as { event_type: string; from_status: string | null; to_status: string | null }[];
-    assert.deepEqual(workflowEvents.map((event) => event.event_type), ['created', 'transferred', 'called', 'recalled', 'started', 'completed']);
+    assert.deepEqual(workflowEvents.map((event) => event.event_type), ['created', 'transferred', 'transferred', 'called', 'recalled', 'started', 'completed']);
     assert.deepEqual(workflowEvents.slice(-4).map((event) => [event.from_status, event.to_status]), [
       ['waiting', 'called'], ['called', 'called'], ['called', 'serving'], ['serving', 'completed'],
     ]);
