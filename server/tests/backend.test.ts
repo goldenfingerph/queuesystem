@@ -885,6 +885,42 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
       [targetCounter, 'ended'], [thirdCounter, 'active'],
     ], 'reassignment must end the previous active assignment before creating the new one');
     assert.ok(assignmentHistory[0].ended_at, 'ended assignment must record its end timestamp');
+
+    // Exercise a complete two-hop transfer: the same ticket must retain its
+    // number and original creation time while its pinned counter changes.
+    db.prepare('INSERT INTO counter_services (counter_id, service_id) VALUES (?, ?)').run(thirdCounter, targetService);
+    const officerThreeToken = middleware.createSession(officerThreeId);
+    const officerThreeSourceAssignment = await fetch(`http://127.0.0.1:${address.port}/api/staff/assignments`, {
+      method: 'POST',
+      headers: officerAssignmentHeaders,
+      body: JSON.stringify({ user_id: officerThreeId, counter_id: targetCounter }),
+    });
+    assert.equal(officerThreeSourceAssignment.status, 200, await officerThreeSourceAssignment.clone().text());
+
+    const beforeSecondTransfer = db.prepare(
+      'SELECT id, number, created_at, service_id, queued_for_counter_id FROM tickets WHERE id = ?',
+    ).get(ticketId) as { id: number; number: string; created_at: string; service_id: number; queued_for_counter_id: number };
+    assert.equal(beforeSecondTransfer.queued_for_counter_id, targetCounter);
+    const secondHop = await transferRequest(officerThreeToken, ticketId, targetService, thirdCounter);
+    assert.equal(secondHop.status, 200, await secondHop.clone().text());
+    const afterSecondTransfer = db.prepare(
+      'SELECT id, number, created_at, service_id, status, counter_id, queued_for_counter_id, transfer_priority FROM tickets WHERE id = ?',
+    ).get(ticketId) as {
+      id: number; number: string; created_at: string; service_id: number; status: string;
+      counter_id: number | null; queued_for_counter_id: number; transfer_priority: number;
+    };
+    assert.deepEqual(afterSecondTransfer, {
+      ...beforeSecondTransfer,
+      status: 'waiting',
+      counter_id: null,
+      queued_for_counter_id: thirdCounter,
+      transfer_priority: 1,
+    }, 'a second transfer must preserve the same ticket ID, number, creation time and service identity while pinning the new counter');
+    const transferEvents = db.prepare(
+      "SELECT event_type FROM queue_events WHERE ticket_id = ? AND event_type = 'transferred' ORDER BY id",
+    ).all(ticketId) as { event_type: string }[];
+    assert.equal(transferEvents.length, 2, 'ticket history must retain both transfer events');
+
     const reactivatePreviousAssignment = await fetch(
       `http://127.0.0.1:${address.port}/api/staff/assignments/${officerAssignmentData.id}`,
       {
