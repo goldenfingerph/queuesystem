@@ -672,6 +672,43 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
       .get(userId, auth.hashToken(legacyToken));
     assert.ok(migratedLegacySession, 'legacy session should be upgraded to a token digest');
 
+    const transferRequest = (bearer: string, ticket: number, service: number, counter: number) => fetch(`http://127.0.0.1:${address.port}/api/tickets/transfer`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${bearer}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ ticket_id: ticket, to_service_id: service, to_counter_id: counter }),
+    });
+
+    // A service officer must be assigned to the ticket's current/pinned counter.
+    const unassignedOfficerId = Number(db.prepare(
+      "INSERT INTO users (username, password_hash, display_name, role, is_active) VALUES ('unassigned-officer', 'test-hash', 'Unassigned Officer', 'service_officer', 1)",
+    ).run().lastInsertRowid);
+    const unassignedOfficerToken = middleware.createSession(unassignedOfficerId);
+    const unauthorizedTransfer = await transferRequest(unassignedOfficerToken, ticketId, targetService, targetCounter);
+    assert.equal(unauthorizedTransfer.status, 403,
+      'a service officer without an active assignment at the ticket source counter must not transfer it');
+
+    const wrongTargetService = await transferRequest(token, ticketId, sourceService, targetCounter);
+    assert.equal(wrongTargetService.status, 400,
+      'the selected target service must be assigned to the target counter');
+
+    const missingTargetService = await transferRequest(token, ticketId, 999999, targetCounter);
+    assert.equal(missingTargetService.status, 404, 'a missing target service must be rejected');
+    const missingTargetCounter = await transferRequest(token, ticketId, targetService, 999999);
+    assert.equal(missingTargetCounter.status, 404, 'a missing target counter must be rejected');
+
+    db.prepare('UPDATE services SET is_active = 0 WHERE id = ?').run(targetService);
+    const inactiveTargetService = await transferRequest(token, ticketId, targetService, targetCounter);
+    assert.equal(inactiveTargetService.status, 404, 'an inactive target service must be rejected');
+    db.prepare('UPDATE services SET is_active = 1 WHERE id = ?').run(targetService);
+
+    db.prepare('UPDATE counters SET is_active = 0 WHERE id = ?').run(targetCounter);
+    const inactiveTargetCounter = await transferRequest(token, ticketId, targetService, targetCounter);
+    assert.equal(inactiveTargetCounter.status, 404, 'an inactive target counter must be rejected');
+    db.prepare('UPDATE counters SET is_active = 1 WHERE id = ?').run(targetCounter);
+
+    const sameSourceCounter = await transferRequest(token, ticketId, sourceService, sourceCounter);
+    assert.equal(sameSourceCounter.status, 400, 'a ticket cannot be transferred back to its current counter');
+
     const response = await fetch(`http://127.0.0.1:${address.port}/api/tickets/transfer`, {
       method: 'POST',
       headers: {
@@ -699,6 +736,13 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
     assert.equal(ticket.counter_id, null);
     assert.equal(ticket.queued_for_counter_id, targetCounter);
     assert.equal(ticket.transfer_priority, 1);
+    const repeatedSameCounterTransfer = await transferRequest(token, ticketId, targetService, targetCounter);
+    assert.equal(repeatedSameCounterTransfer.status, 400,
+      'a waiting transferred ticket remains pinned and cannot be transferred to the same counter again');
+    const unassignedRepeatTransfer = await transferRequest(unassignedOfficerToken, ticketId, targetService, sourceCounter);
+    assert.equal(unassignedRepeatTransfer.status, 403,
+      'a transferred waiting ticket must remain protected by its pinned target-counter assignment');
+
 
     const unauthorizedCounterCall = await fetch(`http://127.0.0.1:${address.port}/api/tickets/call-next`, {
       method: 'POST',
