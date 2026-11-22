@@ -1322,6 +1322,24 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
     });
     assert.equal(unauthenticatedUpload.status, 401);
 
+    // Management metadata and upload endpoints must never be exposed to public TV clients.
+    const publicAdsManagement = await fetch(`http://127.0.0.1:${address.port}/api/ads`);
+    assert.equal(publicAdsManagement.status, 401, 'advertisement management must require administrator authentication');
+    const publicLogoManagement = await fetch(`http://127.0.0.1:${address.port}/api/logo`);
+    assert.equal(publicLogoManagement.status, 401, 'logo management must require administrator authentication');
+    const officerAdsManagement = await fetch(`http://127.0.0.1:${address.port}/api/ads`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    assert.equal(officerAdsManagement.status, 403, 'non-admin staff must not access advertisement management');
+    const adminAdsManagement = await fetch(`http://127.0.0.1:${address.port}/api/ads`, {
+      headers: { authorization: `Bearer ${adminToken}` },
+    });
+    assert.equal(adminAdsManagement.status, 200, 'administrators must retain advertisement management access');
+    const adminLogoManagement = await fetch(`http://127.0.0.1:${address.port}/api/logo`, {
+      headers: { authorization: `Bearer ${adminToken}` },
+    });
+    assert.equal(adminLogoManagement.status, 200, 'administrators must retain logo management access');
+
     const pngHeader = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
     const logoForm = new FormData();
     logoForm.append('logo', new Blob([pngHeader], { type: 'image/png' }), 'brand.png');
