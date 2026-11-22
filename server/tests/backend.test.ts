@@ -780,6 +780,83 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
     const admin = db.prepare("SELECT id FROM users WHERE username = 'admin'").get() as { id: number };
     const adminToken = middleware.createSession(admin.id);
 
+    // Staff assignment APIs are admin-only, and active assignments must be unique.
+    const receptionistId = Number(db.prepare(
+      "INSERT INTO users (username, password_hash, display_name, role, is_active) VALUES (?, ?, ?, 'receptionist', 1)",
+    ).run('assignment-receptionist', 'test-hash', 'Assignment Receptionist').lastInsertRowid);
+    const receptionistToken = middleware.createSession(receptionistId);
+    const officerTwoId = Number(db.prepare(
+      "INSERT INTO users (username, password_hash, display_name, role, is_active) VALUES (?, ?, ?, 'service_officer', 1)",
+    ).run('assignment-officer-two', 'test-hash', 'Assignment Officer Two').lastInsertRowid);
+    const officerThreeId = Number(db.prepare(
+      "INSERT INTO users (username, password_hash, display_name, role, is_active) VALUES (?, ?, ?, 'service_officer', 1)",
+    ).run('assignment-officer-three', 'test-hash', 'Assignment Officer Three').lastInsertRowid);
+    const thirdCounter = Number(db.prepare(
+      "INSERT INTO counters (number, name, is_active) VALUES (3, 'Reassignment Target', 1)",
+    ).run().lastInsertRowid);
+    const officerAssignmentHeaders = {
+      authorization: `Bearer ${adminToken}`,
+      'content-type': 'application/json',
+    };
+    for (const roleToken of [token, receptionistToken]) {
+      const deniedAssignments = await fetch(`http://127.0.0.1:${address.port}/api/staff/assignments`, {
+        headers: { authorization: `Bearer ${roleToken}` },
+      });
+      assert.equal(deniedAssignments.status, 403,
+        'service officers and receptionists must not view staff assignments');
+      const deniedAssignmentCreate = await fetch(`http://127.0.0.1:${address.port}/api/staff/assignments`, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${roleToken}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ user_id: officerTwoId, counter_id: targetCounter }),
+      });
+      assert.equal(deniedAssignmentCreate.status, 403,
+        'service officers and receptionists must not create staff assignments');
+    }
+    const officerAssignment = await fetch(`http://127.0.0.1:${address.port}/api/staff/assignments`, {
+      method: 'POST',
+      headers: officerAssignmentHeaders,
+      body: JSON.stringify({ user_id: officerTwoId, counter_id: targetCounter }),
+    });
+    assert.equal(officerAssignment.status, 200, await officerAssignment.clone().text());
+    const officerAssignmentData = await officerAssignment.json() as { id: number };
+    const duplicateCounterAssignment = await fetch(`http://127.0.0.1:${address.port}/api/staff/assignments`, {
+      method: 'POST',
+      headers: officerAssignmentHeaders,
+      body: JSON.stringify({ user_id: officerThreeId, counter_id: targetCounter }),
+    });
+    assert.equal(duplicateCounterAssignment.status, 409,
+      'a counter must not receive a second active staff assignment');
+    const reassignment = await fetch(`http://127.0.0.1:${address.port}/api/staff/assignments`, {
+      method: 'POST',
+      headers: officerAssignmentHeaders,
+      body: JSON.stringify({ user_id: officerTwoId, counter_id: thirdCounter }),
+    });
+    assert.equal(reassignment.status, 200, await reassignment.clone().text());
+    const reassignmentData = await reassignment.json() as { id: number };
+    assert.notEqual(reassignmentData.id, officerAssignmentData.id);
+    const assignmentHistory = db.prepare(
+      'SELECT id, counter_id, status, ended_at FROM staff_assignments WHERE user_id = ? ORDER BY id',
+    ).all(officerTwoId) as Array<{ id: number; counter_id: number; status: string; ended_at: string | null }>;
+    assert.deepEqual(assignmentHistory.map(({ counter_id, status }) => [counter_id, status]), [
+      [targetCounter, 'ended'], [thirdCounter, 'active'],
+    ], 'reassignment must end the previous active assignment before creating the new one');
+    assert.ok(assignmentHistory[0].ended_at, 'ended assignment must record its end timestamp');
+    const reactivatePreviousAssignment = await fetch(
+      `http://127.0.0.1:${address.port}/api/staff/assignments/${officerAssignmentData.id}`,
+      {
+        method: 'PUT',
+        headers: officerAssignmentHeaders,
+        body: JSON.stringify({ status: 'active' }),
+      },
+    );
+    assert.equal(reactivatePreviousAssignment.status, 409,
+      'a staff member must not reactivate an old assignment while another counter assignment is active');
+    assert.equal(
+      (db.prepare("SELECT COUNT(*) AS count FROM staff_assignments WHERE user_id = ? AND status = 'active'").get(officerTwoId) as { count: number }).count,
+      1,
+      'a staff member must have at most one active counter assignment',
+    );
+
     // A transferred waiting ticket is still pinned to the target counter.
     // Disabling or deleting that counter must not silently unpin the ticket.
     const disableResponse = await fetch(`http://127.0.0.1:${address.port}/api/counters/${targetCounter}`, {
