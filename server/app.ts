@@ -62,8 +62,10 @@ export function createApp(): Express {
   // Every mutation remains protected by a valid staff session.
   app.use('/api/services', protectUnlessGet(), servicesRouter());
   app.use('/api/settings', protectUnlessGet('admin', 'senior_clerk'), settingsRouter());
-  app.use('/api/logo', protectUnlessGet(), logoManageRouter());
-  app.use('/api/ads', protectUnlessGet(), adsManageRouter());
+  // Logo management is private; public TV clients use /api/media/logo/current.
+  app.use('/api/logo', authMiddleware, requireRole('admin'), logoManageRouter());
+  // Advertisement management is private; public TV clients use /api/media/ads.
+  app.use('/api/ads', authMiddleware, requireRole('admin'), adsManageRouter());
 
   // Public TV projection deliberately excludes visitor names/contact details.
   app.get('/api/tv/queue', (_req, res) => {
