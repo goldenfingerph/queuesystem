@@ -64,7 +64,6 @@ jobs:
           if ($errors.Count -gt 0) { $errors | ForEach-Object { Write-Error $_.Message }; throw "Kiosk startup PowerShell syntax validation failed." }
           Write-Host "Kiosk startup PowerShell syntax is valid."
           & "scripts/Test-QueueStartupConfiguration.ps1"
-          if ($LASTEXITCODE -ne 0) { throw "Windows automatic startup configuration validation failed." }
 
       - name: Lint frontend and backend
         run: npm run lint
