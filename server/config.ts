@@ -75,7 +75,11 @@ export function validateServerEnvironment(values: NodeJS.ProcessEnv = process.en
         continue;
       }
       try {
-        fs.accessSync(path.resolve(value), fs.constants.R_OK);
+        const resolvedPath = path.resolve(value);
+        fs.accessSync(resolvedPath, fs.constants.R_OK);
+        if (!fs.statSync(resolvedPath).isFile()) {
+          errors.push(`${name} must point to a readable regular file.`);
+        }
       } catch {
         errors.push(`${name} points to a file that does not exist or cannot be read.`);
       }
