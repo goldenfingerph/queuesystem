@@ -430,12 +430,12 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
       "INSERT INTO users (username, password_hash, display_name, role, is_active) VALUES ('report-senior-clerk', 'test-hash', 'Report Senior Clerk', 'senior_clerk', 1)",
     ).run().lastInsertRowid);
     const seniorClerkToken = middleware.createSession(seniorClerkId);
-    const receptionistId = Number(db.prepare(
+    const reportReceptionistId = Number(db.prepare(
       "INSERT INTO users (username, password_hash, display_name, role, is_active) VALUES ('report-receptionist', 'test-hash', 'Report Receptionist', 'receptionist', 1)",
     ).run().lastInsertRowid);
-    const receptionistToken = middleware.createSession(receptionistId);
+    const reportReceptionistToken = middleware.createSession(reportReceptionistId);
     const adminId = (db.prepare("SELECT id FROM users WHERE role = 'admin' AND is_active = 1 ORDER BY id LIMIT 1").get() as { id: number }).id;
-    const adminToken = middleware.createSession(adminId);
+    const reportAdminToken = middleware.createSession(adminId);
     const storedSession = db.prepare('SELECT token FROM sessions WHERE user_id = ?').get(userId) as { token: string };
     assert.equal(storedSession.token, auth.hashToken(token), 'SQLite must store only the token digest');
     server = http.createServer(createApp());
@@ -477,7 +477,7 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
 
     // Reports are confidential management data: only admin and senior clerk
     // roles may access dashboards, analytics, daily reports, or exports.
-    for (const restrictedToken of [token, receptionistToken]) {
+    for (const restrictedToken of [token, reportReceptionistToken]) {
       for (const endpoint of ['/api/reports/dashboard', '/api/reports/analytics?from=2026-11-08&to=2026-11-08', '/api/reports/export?date=2026-11-08']) {
         const denied = await fetch(`http://127.0.0.1:${address.port}${endpoint}`, {
           headers: { authorization: `Bearer ${restrictedToken}` },
@@ -485,7 +485,7 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
         assert.equal(denied.status, 403, `${endpoint} must reject service officers and receptionists`);
       }
     }
-    for (const authorizedToken of [seniorClerkToken, adminToken]) {
+    for (const authorizedToken of [seniorClerkToken, reportAdminToken]) {
       const allowed = await fetch(`http://127.0.0.1:${address.port}/api/reports/dashboard`, {
         headers: { authorization: `Bearer ${authorizedToken}` },
       });
