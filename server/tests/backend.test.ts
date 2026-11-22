@@ -1549,20 +1549,13 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
       headers: { authorization: `Bearer ${adminToken}` },
     });
     assert.equal(loggedOutSession.status, 401, 'logout must immediately invalidate the bearer token');
-    // Use dedicated fixtures here because earlier assertions intentionally
-    // exercise service deletion and counter cleanup.
-    const integrationServiceId = Number(db.prepare(
-      "INSERT INTO services (name, name_ar, code, prefix, ticket_range_start, ticket_range_end) VALUES ('Integration service', 'خدمة التكامل', 'E2E', 'E', 7000, 7999)",
-    ).run().lastInsertRowid);
-    const integrationCounterNumber = (db.prepare(
-      'SELECT COALESCE(MAX(number), 0) + 1 AS next_number FROM counters',
-    ).get() as { next_number: number }).next_number;
-    const integrationCounterId = Number(db.prepare(
-      'INSERT INTO counters (number, name, is_active) VALUES (?, ?, 1)',
-    ).run(integrationCounterNumber, 'Integration Test Counter').lastInsertRowid);
-    db.prepare('INSERT INTO counter_services (counter_id, service_id) VALUES (?, ?)').run(
-      integrationCounterId, integrationServiceId,
-    );
+    // Reuse the original active service/counter fixtures. Earlier cleanup
+    // checks deliberately remove temporary services and counters.
+    const integrationServiceId = sourceService;
+    const integrationCounterId = sourceCounter;
+    const integrationCounterNumber = 1;
+    assert.ok(db.prepare('SELECT id FROM services WHERE id = ? AND is_active = 1').get(integrationServiceId),
+      'the reception workflow fixture service must still exist and be active');
 
     // Full reception-to-TV-to-counter workflow: create a real ticket through
     // the receptionist API, verify the public TV projection, then call, serve,
