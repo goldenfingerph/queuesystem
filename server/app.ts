@@ -20,12 +20,15 @@ import { backupRouter } from './routes/backup.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const protectUnlessGet = (req: Request, res: Response, next: NextFunction) => {
-  if (req.method === 'GET') return next();
-  return authMiddleware(req, res, (authError?: unknown) => {
-    if (authError) return next(authError);
-    return requireRole('admin')(req, res, next);
-  });
+const protectUnlessGet = (...roles: string[]) => {
+  const allowedRoles = roles.length > 0 ? roles : ['admin'];
+  return (req: Request, res: Response, next: NextFunction) => {
+    if (req.method === 'GET') return next();
+    return authMiddleware(req, res, (authError?: unknown) => {
+      if (authError) return next(authError);
+      return requireRole(...allowedRoles)(req, res, next);
+    });
+  };
 };
 
 export function createApp(): Express {
@@ -58,7 +61,7 @@ export function createApp(): Express {
   // Public read-only data needed by the welcome/reception screens and TV.
   // Every mutation remains protected by a valid staff session.
   app.use('/api/services', protectUnlessGet, servicesRouter());
-  app.use('/api/settings', protectUnlessGet, settingsRouter());
+  app.use('/api/settings', protectUnlessGet('admin', 'senior_clerk'), settingsRouter());
   app.use('/api/logo', protectUnlessGet, logoManageRouter());
   app.use('/api/ads', protectUnlessGet, adsManageRouter());
 
