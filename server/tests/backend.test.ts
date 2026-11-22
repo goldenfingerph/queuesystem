@@ -1549,6 +1549,21 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
       headers: { authorization: `Bearer ${adminToken}` },
     });
     assert.equal(loggedOutSession.status, 401, 'logout must immediately invalidate the bearer token');
+    // Use dedicated fixtures here because earlier assertions intentionally
+    // exercise service deletion and counter cleanup.
+    const integrationServiceId = Number(db.prepare(
+      "INSERT INTO services (name, name_ar, code, prefix, ticket_range_start, ticket_range_end) VALUES ('Integration service', 'خدمة التكامل', 'E2E', 'E', 7000, 7999)",
+    ).run().lastInsertRowid);
+    const integrationCounterNumber = (db.prepare(
+      'SELECT COALESCE(MAX(number), 0) + 1 AS next_number FROM counters',
+    ).get() as { next_number: number }).next_number;
+    const integrationCounterId = Number(db.prepare(
+      'INSERT INTO counters (number, name, is_active) VALUES (?, ?, 1)',
+    ).run(integrationCounterNumber, 'Integration Test Counter').lastInsertRowid);
+    db.prepare('INSERT INTO counter_services (counter_id, service_id) VALUES (?, ?)').run(
+      integrationCounterId, integrationServiceId,
+    );
+
     // Full reception-to-TV-to-counter workflow: create a real ticket through
     // the receptionist API, verify the public TV projection, then call, serve,
     // and complete it through the staff APIs.
@@ -1558,7 +1573,7 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
         authorization: `Bearer ${reportReceptionistToken}`,
         'content-type': 'application/json',
       },
-      body: JSON.stringify({ service_id: sourceService }),
+      body: JSON.stringify({ service_id: integrationServiceId }),
     });
     assert.equal(generatedTicketResponse.status, 200, await generatedTicketResponse.clone().text());
     const generatedTicketData = await generatedTicketResponse.json() as {
@@ -1583,7 +1598,7 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
     const generatedCallNext = await fetch(`http://127.0.0.1:${address.port}/api/tickets/call-next`, {
       method: 'POST',
       headers: { authorization: `Bearer ${adminToken}`, 'content-type': 'application/json' },
-      body: JSON.stringify({ counter_id: sourceCounter }),
+      body: JSON.stringify({ counter_id: integrationCounterId }),
     });
     assert.equal(generatedCallNext.status, 200, await generatedCallNext.clone().text());
     const generatedCallData = await generatedCallNext.json() as { ticket: { id: number } };
@@ -1597,7 +1612,7 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
       waitingTickets: Array<{ id: number }>;
     };
     assert.ok(tvCalledData.currentTickets.some((ticket) =>
-      ticket.id === generatedTicketId && ticket.status === 'called' && ticket.counter_number === 1),
+      ticket.id === generatedTicketId && ticket.status === 'called' && ticket.counter_number === integrationCounterNumber),
     'TV must show the called ticket and its serving counter');
     assert.equal(tvCalledData.waitingTickets.some((ticket) => ticket.id === generatedTicketId), false,
       'called ticket must leave the waiting queue');
