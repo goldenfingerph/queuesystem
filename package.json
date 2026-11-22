@@ -68,6 +68,11 @@
     "@eslint/plugin-kit": "^0.3.4",
     "sucrase": {
       "glob": "14.0.4"
-    }
+    },
+    "browserslist": "^4.28.7",
+    "flatted": "^3.4.2",
+    "picomatch": "^2.3.2",
+    "postcss-selector-parser": "^6.1.5",
+    "yaml": "^2.8.3"
   }
 }
