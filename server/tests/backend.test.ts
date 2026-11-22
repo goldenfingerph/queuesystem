@@ -1159,6 +1159,56 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
     });
     assert.equal(ipBlocked.status, 429);
     assert.ok(Number(ipBlocked.headers.get('retry-after')) > 0);
+
+    // Expired and malformed bearer tokens must never authenticate.
+    const expiredToken = 'b'.repeat(64);
+    db.prepare('INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, datetime(\'now\', \'-1 hour\'))')
+      .run(auth.hashToken(expiredToken), admin.id);
+    const expiredSession = await fetch(`http://127.0.0.1:${address.port}/api/auth/me`, {
+      headers: { authorization: `Bearer ${expiredToken}` },
+    });
+    assert.equal(expiredSession.status, 401, 'expired sessions must be rejected');
+    assert.equal(
+      db.prepare('SELECT token FROM sessions WHERE token = ?').get(auth.hashToken(expiredToken)),
+      undefined,
+      'expired session records must be deleted when encountered',
+    );
+    const malformedSession = await fetch(`http://127.0.0.1:${address.port}/api/auth/me`, {
+      headers: { authorization: 'Bearer not-a-64-character-hex-token' },
+    });
+    assert.equal(malformedSession.status, 401, 'malformed bearer tokens must be rejected');
+
+    // Password changes retain the current device session and revoke every other session.
+    const secondaryAdminToken = middleware.createSession(admin.id);
+    const passwordChange = await fetch(`http://127.0.0.1:${address.port}/api/auth/change-password`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${adminToken}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        currentPassword: firstRunPassword,
+        newPassword: 'test-new-admin-password-2026',
+      }),
+    });
+    assert.equal(passwordChange.status, 200, await passwordChange.text());
+    const retainedSession = await fetch(`http://127.0.0.1:${address.port}/api/auth/me`, {
+      headers: { authorization: `Bearer ${adminToken}` },
+    });
+    assert.equal(retainedSession.status, 200, 'the device changing its password should remain signed in');
+    const revokedSession = await fetch(`http://127.0.0.1:${address.port}/api/auth/me`, {
+      headers: { authorization: `Bearer ${secondaryAdminToken}` },
+    });
+    assert.equal(revokedSession.status, 401, 'password changes must revoke other sessions');
+    const logoutResponse = await fetch(`http://127.0.0.1:${address.port}/api/auth/logout`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${adminToken}` },
+    });
+    assert.equal(logoutResponse.status, 200, await logoutResponse.text());
+    const loggedOutSession = await fetch(`http://127.0.0.1:${address.port}/api/auth/me`, {
+      headers: { authorization: `Bearer ${adminToken}` },
+    });
+    assert.equal(loggedOutSession.status, 401, 'logout must immediately invalidate the bearer token');
   } finally {
     if (server) await new Promise<void>((resolve) => server!.close(() => resolve()));
     closeDb?.();
