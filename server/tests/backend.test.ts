@@ -939,7 +939,7 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
 
     // A transferred waiting ticket is still pinned to the target counter.
     // Disabling or deleting that counter must not silently unpin the ticket.
-    const disableResponse = await fetch(`http://127.0.0.1:${address.port}/api/counters/${targetCounter}`, {
+    const disableResponse = await fetch(`http://127.0.0.1:${address.port}/api/counters/${thirdCounter}`, {
       method: 'PUT',
       headers: {
         authorization: `Bearer ${adminToken}`,
@@ -949,12 +949,12 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
     });
     assert.equal(disableResponse.status, 409, await disableResponse.text());
 
-    const deleteResponse = await fetch(`http://127.0.0.1:${address.port}/api/counters/${targetCounter}`, {
+    const deleteResponse = await fetch(`http://127.0.0.1:${address.port}/api/counters/${thirdCounter}`, {
       method: 'DELETE',
       headers: { authorization: `Bearer ${adminToken}` },
     });
     assert.equal(deleteResponse.status, 409, await deleteResponse.text());
-    assert.ok(db.prepare('SELECT id FROM counters WHERE id = ?').get(targetCounter));
+    assert.ok(db.prepare('SELECT id FROM counters WHERE id = ?').get(thirdCounter));
 
     const officerBackupList = await fetch(`http://127.0.0.1:${address.port}/api/backups`, {
       headers: { authorization: `Bearer ${token}` },
@@ -1002,7 +1002,7 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
     const callNextResponse = await fetch(`http://127.0.0.1:${address.port}/api/tickets/call-next`, {
       method: 'POST',
       headers: { authorization: `Bearer ${adminToken}`, 'content-type': 'application/json' },
-      body: JSON.stringify({ counter_id: targetCounter }),
+      body: JSON.stringify({ counter_id: thirdCounter }),
     });
     assert.equal(callNextResponse.status, 200, await callNextResponse.clone().text());
     const callNextData = await callNextResponse.json() as { ticket: { id: number; number: string } };
@@ -1012,12 +1012,12 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
       status: string; counter_id: number | null;
     };
     assert.equal(calledTicket.status, 'called');
-    assert.equal(calledTicket.counter_id, targetCounter);
+    assert.equal(calledTicket.counter_id, thirdCounter);
 
     const duplicateCallNext = await fetch(`http://127.0.0.1:${address.port}/api/tickets/call-next`, {
       method: 'POST',
       headers: { authorization: `Bearer ${adminToken}`, 'content-type': 'application/json' },
-      body: JSON.stringify({ counter_id: targetCounter }),
+      body: JSON.stringify({ counter_id: thirdCounter }),
     });
     assert.equal(duplicateCallNext.status, 409,
       'a counter with an active called ticket must not call a second ticket');
@@ -1050,7 +1050,7 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
       status: string; counter_id: number | null; completed_at: string | null;
     };
     assert.equal(completedTicket.status, 'completed');
-    assert.equal(completedTicket.counter_id, targetCounter);
+    assert.equal(completedTicket.counter_id, thirdCounter);
     assert.ok(completedTicket.completed_at, 'completion timestamp must be stored');
 
     const duplicateCompleteResponse = await fetch(`http://127.0.0.1:${address.port}/api/tickets/complete`, {
