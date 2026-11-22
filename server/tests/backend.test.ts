@@ -360,6 +360,25 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
     assert.throws(() => serverConfig.validateServerEnvironment({ PORT: '0' }), /PORT must be a whole number/);
     assert.throws(() => serverConfig.validateServerEnvironment({ HOST: 'bad host' }), /HOST must be a valid/);
     assert.throws(() => serverConfig.validateServerEnvironment({ TLS_CERT_FILE: 'server.crt' }), /TLS_CERT_FILE and TLS_KEY_FILE/);
+    const tlsDirectory = path.join(directory, 'tls');
+    fs.mkdirSync(tlsDirectory);
+    const tlsCertPath = path.join(tlsDirectory, 'server.crt');
+    const tlsKeyPath = path.join(tlsDirectory, 'server.key');
+    fs.writeFileSync(tlsCertPath, 'test certificate');
+    fs.writeFileSync(tlsKeyPath, 'test private key');
+    assert.doesNotThrow(() => serverConfig.validateServerEnvironment({
+      TLS_CERT_FILE: tlsCertPath,
+      TLS_KEY_FILE: tlsKeyPath,
+    }), 'a readable certificate/key file pair must pass path validation');
+    assert.throws(() => serverConfig.validateServerEnvironment({
+      TLS_CERT_FILE: tlsDirectory,
+      TLS_KEY_FILE: tlsKeyPath,
+    }), /TLS_CERT_FILE must point to a readable regular file/,
+    'TLS configuration must reject directories instead of failing later during server startup');
+    assert.throws(() => serverConfig.validateServerEnvironment({
+      TLS_CERT_FILE: path.join(tlsDirectory, 'missing.crt'),
+      TLS_KEY_FILE: tlsKeyPath,
+    }), /TLS_CERT_FILE points to a file that does not exist or cannot be read/);
     assert.throws(() => serverConfig.validateServerEnvironment({ ADMIN_INITIAL_PASSWORD: 'short' }), /ADMIN_INITIAL_PASSWORD must be 12 to 200/);
     assert.throws(() => serverConfig.validateServerEnvironment({ QUEUE_EVENT_RETENTION_DAYS: '10' }), /QUEUE_EVENT_RETENTION_DAYS must be a whole number from 30 to 3650/);
     const firstRunPassword = 'test-first-run-admin-password';
