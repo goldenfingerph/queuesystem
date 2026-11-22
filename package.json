@@ -12,7 +12,7 @@
     "server": "tsx server/index.ts",
     "start": "npm run build && npm run server",
     "db:restore": "tsx server/scripts/restore-backup.ts",
-    "test:backend": "tsx --test server/tests/backend.test.ts"
+    "test:backend": "tsx --test server/tests/backend.test.ts server/tests/security.test.ts"
   },
   "dependencies": {
     "bidi-shaper": "^0.1.0",
