@@ -724,10 +724,16 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
     assert.equal(filteredPageData.pagination.total, 2);
     assert.equal(filteredPageData.pagination.totalPages, 2);
 
-    const invalidTicketPage = await fetch(`http://127.0.0.1:${address.port}/api/tickets?page=0`, {
+    const serviceOfficerTicketList = await fetch(`http://127.0.0.1:${address.port}/api/tickets?page=1`, {
       headers: { authorization: `Bearer ${token}` },
     });
-    assert.equal(invalidTicketPage.status, 400, 'page numbers must be positive whole numbers');
+    assert.equal(serviceOfficerTicketList.status, 403,
+      'service officers must not access the management ticket list API');
+
+    const invalidTicketPage = await fetch(`http://127.0.0.1:${address.port}/api/tickets?page=0`, {
+      headers: { authorization: `Bearer ${seniorClerkToken}` },
+    });
+    assert.equal(invalidTicketPage.status, 400, 'authorized users must receive pagination validation errors');
 
     for (const indexName of [
       'idx_tickets_created_id',
