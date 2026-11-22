@@ -505,16 +505,16 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
       headers: { authorization: `Bearer ${seniorClerkToken}`, 'content-type': 'application/json' },
       body: JSON.stringify({ number: 98, name: 'Senior Clerk Counter' }),
     });
-    assert.equal(seniorCounter.status, 200, await seniorCounter.clone().text(),
-      'senior clerks must be able to manage counters');
+    assert.equal(seniorCounter.status, 200,
+      'senior clerks must be able to manage counters: ' + await seniorCounter.clone().text());
     const queueModeRow = db.prepare("SELECT value FROM system_settings WHERE key = 'queue_mode'").get() as { value: string } | undefined;
     const seniorQueueSettings = await fetch(`http://127.0.0.1:${address.port}/api/settings`, {
       method: 'PUT',
       headers: { authorization: `Bearer ${seniorClerkToken}`, 'content-type': 'application/json' },
       body: JSON.stringify({ settings: { queue_mode: queueModeRow?.value ?? 'priority', ticket_padding: 3 } }),
     });
-    assert.equal(seniorQueueSettings.status, 200, await seniorQueueSettings.clone().text(),
-      'senior clerks must be able to update queue-only settings');
+    assert.equal(seniorQueueSettings.status, 200,
+      'senior clerks must be able to update queue-only settings: ' + await seniorQueueSettings.clone().text());
     const seniorAdminSettings = await fetch(`http://127.0.0.1:${address.port}/api/settings`, {
       method: 'PUT',
       headers: { authorization: `Bearer ${seniorClerkToken}`, 'content-type': 'application/json' },
