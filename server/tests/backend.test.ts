@@ -475,6 +475,54 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
     });
     assert.equal(anonymousTicketCreate.status, 401, 'ticket creation must require a receptionist/staff session');
 
+    // Server authorization must match the role-to-module matrix, even when
+    // callers bypass the frontend and invoke API routes directly.
+    for (const restrictedToken of [token, reportReceptionistToken]) {
+      const historyDenied = await fetch(`http://127.0.0.1:${address.port}/api/tickets`, {
+        headers: { authorization: `Bearer ${restrictedToken}` },
+      });
+      assert.equal(historyDenied.status, 403, 'ticket history must be limited to admin and senior clerk');
+      const counterDenied = await fetch(`http://127.0.0.1:${address.port}/api/counters`, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${restrictedToken}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ number: 98, name: 'Unauthorized Counter' }),
+      });
+      assert.equal(counterDenied.status, 403, 'counter configuration must reject service officers and receptionists');
+      const settingsDenied = await fetch(`http://127.0.0.1:${address.port}/api/settings`, {
+        method: 'PUT',
+        headers: { authorization: `Bearer ${restrictedToken}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ settings: { queue_mode: 'priority' } }),
+      });
+      assert.equal(settingsDenied.status, 403, 'queue settings must reject service officers and receptionists');
+    }
+
+    const seniorHistory = await fetch(`http://127.0.0.1:${address.port}/api/tickets`, {
+      headers: { authorization: `Bearer ${seniorClerkToken}` },
+    });
+    assert.equal(seniorHistory.status, 200, 'senior clerks must retain ticket-history access');
+    const seniorCounter = await fetch(`http://127.0.0.1:${address.port}/api/counters`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${seniorClerkToken}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ number: 98, name: 'Senior Clerk Counter' }),
+    });
+    assert.equal(seniorCounter.status, 200, await seniorCounter.clone().text(),
+      'senior clerks must be able to manage counters');
+    const queueModeRow = db.prepare("SELECT value FROM system_settings WHERE key = 'queue_mode'").get() as { value: string } | undefined;
+    const seniorQueueSettings = await fetch(`http://127.0.0.1:${address.port}/api/settings`, {
+      method: 'PUT',
+      headers: { authorization: `Bearer ${seniorClerkToken}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ settings: { queue_mode: queueModeRow?.value ?? 'priority', ticket_padding: 3 } }),
+    });
+    assert.equal(seniorQueueSettings.status, 200, await seniorQueueSettings.clone().text(),
+      'senior clerks must be able to update queue-only settings');
+    const seniorAdminSettings = await fetch(`http://127.0.0.1:${address.port}/api/settings`, {
+      method: 'PUT',
+      headers: { authorization: `Bearer ${seniorClerkToken}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ settings: { org_name_en: 'Unauthorized Organization Change' } }),
+    });
+    assert.equal(seniorAdminSettings.status, 403,
+      'senior clerks must not change administrator-only organization settings');
+
     // Reports are confidential management data: only admin and senior clerk
     // roles may access dashboards, analytics, daily reports, or exports.
     for (const restrictedToken of [token, reportReceptionistToken]) {
@@ -512,7 +560,7 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
     assert.equal(legacyResponse.headers.get('x-powered-by'), null, 'Express fingerprint header must be disabled');
 
     const firstTicketPage = await fetch(`http://127.0.0.1:${address.port}/api/tickets?page=1&limit=2`, {
-      headers: { authorization: `Bearer ${token}` },
+      headers: { authorization: `Bearer ${seniorClerkToken}` },
     });
     assert.equal(firstTicketPage.status, 200);
     const firstPageData = await firstTicketPage.json() as {
@@ -530,7 +578,7 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
     assert.equal(firstPageData.tickets[1].number, '9001');
 
     const secondTicketPage = await fetch(`http://127.0.0.1:${address.port}/api/tickets?page=2&limit=2`, {
-      headers: { authorization: `Bearer ${token}` },
+      headers: { authorization: `Bearer ${seniorClerkToken}` },
     });
     assert.equal(secondTicketPage.status, 200);
     const secondPageData = await secondTicketPage.json() as {
@@ -543,7 +591,7 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
     assert.equal(secondPageData.pagination.hasPreviousPage, true);
 
     const historyResponse = await fetch(`http://127.0.0.1:${address.port}/api/tickets?fromDate=2026-11-08&toDate=2026-11-08&search=Source%20service&page=1&limit=10`, {
-      headers: { authorization: `Bearer ${token}` },
+      headers: { authorization: `Bearer ${seniorClerkToken}` },
     });
     assert.equal(historyResponse.status, 200, await historyResponse.clone().text());
     const historyData = await historyResponse.json() as {
@@ -557,14 +605,14 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
     assert.equal(historyData.tickets[0]?.counter_number, null);
 
     const historyPrefixResponse = await fetch(`http://127.0.0.1:${address.port}/api/tickets?fromDate=2026-11-08&toDate=2026-11-08&search=S&page=1&limit=10`, {
-      headers: { authorization: `Bearer ${token}` },
+      headers: { authorization: `Bearer ${seniorClerkToken}` },
     });
     assert.equal(historyPrefixResponse.status, 200);
     const historyPrefixData = await historyPrefixResponse.json() as { pagination: { total: number } };
     assert.equal(historyPrefixData.pagination.total, 3, 'history search must match service prefixes');
 
     const invalidHistoryDate = await fetch(`http://127.0.0.1:${address.port}/api/tickets?fromDate=2026-02-30`, {
-      headers: { authorization: `Bearer ${token}` },
+      headers: { authorization: `Bearer ${seniorClerkToken}` },
     });
     assert.equal(invalidHistoryDate.status, 400, 'invalid calendar dates must be rejected');
 
@@ -665,7 +713,7 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
     assert.equal(invalidExportService.status, 400, 'CSV export must reject invalid service IDs');
 
     const filteredTicketPage = await fetch(`http://127.0.0.1:${address.port}/api/tickets?status=completed&serviceId=${sourceService}&page=2&limit=1`, {
-      headers: { authorization: `Bearer ${token}` },
+      headers: { authorization: `Bearer ${seniorClerkToken}` },
     });
     assert.equal(filteredTicketPage.status, 200);
     const filteredPageData = await filteredTicketPage.json() as {
