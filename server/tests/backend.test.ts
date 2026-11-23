@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import http from 'node:http';
+import { spawnSync } from 'node:child_process';
 import test from 'node:test';
 import Database from 'better-sqlite3';
 import { isAllowedWebSocketOrigin } from '../ws/index.js';
@@ -62,6 +63,44 @@ test('PDF and XLSX exports handle Arabic text, invalid XML controls, and multi-p
   assert.match(pdf, /\/Count 6/, '22-row pagination and three 5-column panels must be retained');
   assert.match(pdf, /\/FontFile2/, 'PDF must embed the Arabic-capable font');
   assert.match(pdf, /\/ToUnicode/, 'PDF must include Unicode mappings for copy/search support');
+});
+
+test('SQLite WAL recovers committed data after abrupt server-process termination', () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'queuesystem-power-recovery-'));
+  const databasePath = path.join(directory, 'power-recovery.db');
+  const childScript = [
+    "const Database = require('better-sqlite3');",
+    "const db = new Database(process.argv[1]);",
+    "db.pragma('journal_mode = WAL');",
+    "db.pragma('synchronous = FULL');",
+    "db.exec('CREATE TABLE recovery_probe (id INTEGER PRIMARY KEY, value TEXT NOT NULL)');",
+    "db.prepare('INSERT INTO recovery_probe (value) VALUES (?)').run('committed-before-interruption');",
+    "db.exec('BEGIN IMMEDIATE');",
+    "db.prepare('INSERT INTO recovery_probe (value) VALUES (?)').run('uncommitted-during-interruption');",
+    "process.exit(0);",
+  ].join('\n');
+  try {
+    const child = spawnSync(process.execPath, ['-e', childScript, databasePath], {
+      encoding: 'utf8',
+      timeout: 15000,
+    });
+    assert.equal(child.error, undefined, child.error?.message);
+    assert.equal(child.status, 0, child.stderr || 'simulated server process must terminate abruptly');
+    const recovered = new Database(databasePath);
+    try {
+      assert.deepEqual(recovered.pragma('integrity_check'), [{ integrity_check: 'ok' }],
+        'SQLite must recover a structurally valid database after abrupt process termination');
+      assert.deepEqual(
+        recovered.prepare('SELECT value FROM recovery_probe ORDER BY id').all(),
+        [{ value: 'committed-before-interruption' }],
+        'committed data must survive and the interrupted uncommitted transaction must roll back',
+      );
+    } finally {
+      recovered.close();
+    }
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
 });
 
 test('restore accepts generic and legacy backup names while rejecting unsafe paths', () => {
