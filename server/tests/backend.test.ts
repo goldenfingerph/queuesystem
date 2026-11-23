@@ -722,6 +722,28 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
     // PDF text is encoded in font-specific hex strings, not literal ASCII.
     // PDF validity and embedded Unicode font mappings are asserted above.
 
+    // CSV must be a real UTF-8 spreadsheet-safe export, not merely reject bad filters.
+    const originalServiceName = 'Source service';
+    const formulaLikeServiceName = '=HYPERLINK("https://example.invalid", "Open"), Main';
+    db.prepare('UPDATE services SET name = ? WHERE id = ?').run(formulaLikeServiceName, sourceService);
+    const csvExport = await fetch(`http://127.0.0.1:${address.port}/api/reports/export?date=2026-11-08`, {
+      headers: { authorization: `Bearer ${seniorClerkToken}` },
+    });
+    assert.equal(csvExport.status, 200, await csvExport.clone().text());
+    assert.match(csvExport.headers.get('content-type') ?? '', /text\/csv; charset=utf-8/i);
+    assert.match(csvExport.headers.get('content-disposition') ?? '', /report-2026-11-08\.csv/);
+    const csvBytes = Buffer.from(await csvExport.arrayBuffer());
+    assert.deepEqual(csvBytes.subarray(0, 3), Buffer.from([0xef, 0xbb, 0xbf]),
+      'CSV must include a UTF-8 BOM so Excel detects Arabic text correctly');
+    const csvText = csvBytes.subarray(3).toString('utf8');
+    assert.match(csvText, /Ticket \/ رقم التذكرة/);
+    assert.match(csvText, /خدمة المصدر/);
+    assert.match(csvText, /"1001"/);
+    assert.match(csvText, /"'=HYPERLINK\(""https:\/\/example\.invalid"", ""Open""\), Main"/,
+      'CSV must quote cells and neutralize formula-like text before opening in spreadsheet software');
+    assert.equal(csvText.split('\n').length, 4, 'CSV must contain one header and all three report rows');
+    db.prepare('UPDATE services SET name = ? WHERE id = ?').run(originalServiceName, sourceService);
+
     const invalidPdfExport = await fetch(`http://127.0.0.1:${address.port}/api/reports/export.pdf?date=2026-02-30`, {
       headers: { authorization: `Bearer ${seniorClerkToken}` },
     });
