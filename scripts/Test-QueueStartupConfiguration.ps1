@@ -61,13 +61,13 @@ foreach ($requirement in $crashRecoveryRequirements) {
 
 $tvKioskRequirements = @(
   '$tvUrl = "$serverUrl/#/tv-display"',
-  'QueueSystem\\ChromeKioskProfile',
+  'QueueSystem\ChromeKioskProfile',
   '--user-data-dir=',
   '--kiosk',
   '--no-first-run',
   '--autoplay-policy=no-user-gesture-required',
   'function Find-Chrome',
-  'Microsoft\\Edge\\Application\\msedge.exe',
+  'Microsoft\Edge\Application\msedge.exe',
   'function Start-TvDisplay',
   'Get-CimInstance Win32_Process',
   '$_.CommandLine.Contains($profilePath)',
