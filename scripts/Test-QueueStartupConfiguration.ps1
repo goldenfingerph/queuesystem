@@ -59,7 +59,31 @@ foreach ($requirement in $crashRecoveryRequirements) {
   }
 }
 
+$tvKioskRequirements = @(
+  '$tvUrl = "$serverUrl/#/tv-display"',
+  'QueueSystem\\ChromeKioskProfile',
+  '--user-data-dir=',
+  '--kiosk',
+  '--no-first-run',
+  '--autoplay-policy=no-user-gesture-required',
+  'function Find-Chrome',
+  'Microsoft\\Edge\\Application\\msedge.exe',
+  'function Start-TvDisplay',
+  'Get-CimInstance Win32_Process',
+  '$_.CommandLine.Contains($profilePath)',
+  '$process.MainWindowHandle -ne 0',
+  'Waiting 5 seconds before opening the TV Display browser.',
+  'if (-not (Test-QueueServer))',
+  'Start-TvDisplay'
+)
+foreach ($requirement in $tvKioskRequirements) {
+  if (-not $watchdog.Contains($requirement)) {
+    throw "QueueSystem TV kiosk startup/recovery is missing required behavior: $requirement"
+  }
+}
+
 Write-Host 'PASS: Windows sign-in startup shortcut points to the hidden watchdog.'
 Write-Host 'PASS: watchdog detects exited server processes, restarts them, and stops a stalled child before retrying.'
-Write-Host 'PASS: watchdog can launch the server, check health, retry, and open the TV in kiosk mode.'
-Write-Host 'NOTE: actual Windows sign-in and power-recovery behavior still requires testing on the target PC.'
+Write-Host 'PASS: TV Display uses the public /#/tv-display route, a persistent browser profile, kiosk/autoplay flags, and Chrome with Edge fallback.'
+Write-Host 'PASS: watchdog waits for a healthy server, detects a missing kiosk window, and relaunches the TV Display.'
+Write-Host 'NOTE: actual Windows sign-in, browser recovery, and power-recovery behavior still requires testing on the target PC.'
