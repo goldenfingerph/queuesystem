@@ -1598,6 +1598,8 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
       headers: { authorization: `Bearer ${adminToken}` },
     });
     assert.equal(loggedOutSession.status, 401, 'logout must immediately invalidate the bearer token');
+    // The logout assertion intentionally revokes adminToken; create a new admin session for the workflow checks below.
+    const integrationAdminToken = middleware.createSession(admin.id);
     // Reuse the original active service/counter fixtures. Earlier cleanup
     // checks deliberately remove temporary services and counters.
     const integrationServiceId = sourceService;
@@ -1639,7 +1641,7 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
 
     const generatedCallNext = await fetch(`http://127.0.0.1:${address.port}/api/tickets/call-next`, {
       method: 'POST',
-      headers: { authorization: `Bearer ${adminToken}`, 'content-type': 'application/json' },
+      headers: { authorization: `Bearer ${integrationAdminToken}`, 'content-type': 'application/json' },
       body: JSON.stringify({ counter_id: integrationCounterId }),
     });
     assert.equal(generatedCallNext.status, 200, await generatedCallNext.clone().text());
@@ -1661,14 +1663,14 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
 
     const generatedStartServing = await fetch(`http://127.0.0.1:${address.port}/api/tickets/start-serving`, {
       method: 'POST',
-      headers: { authorization: `Bearer ${adminToken}`, 'content-type': 'application/json' },
+      headers: { authorization: `Bearer ${integrationAdminToken}`, 'content-type': 'application/json' },
       body: JSON.stringify({ ticket_id: generatedTicketId }),
     });
     assert.equal(generatedStartServing.status, 200, await generatedStartServing.clone().text());
 
     const generatedComplete = await fetch(`http://127.0.0.1:${address.port}/api/tickets/complete`, {
       method: 'POST',
-      headers: { authorization: `Bearer ${adminToken}`, 'content-type': 'application/json' },
+      headers: { authorization: `Bearer ${integrationAdminToken}`, 'content-type': 'application/json' },
       body: JSON.stringify({ ticket_id: generatedTicketId }),
     });
     assert.equal(generatedComplete.status, 200, await generatedComplete.clone().text());
