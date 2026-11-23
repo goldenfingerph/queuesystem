@@ -68,7 +68,6 @@ jobs:
       - name: Lint frontend and backend
         run: npm run lint
       - name: Package Windows 11 project bundle
-        if: ${{ false }}
         shell: pwsh
         run: |
           $packageDir = Join-Path $env:RUNNER_TEMP "QueueSystem-Windows"
@@ -118,6 +117,8 @@ jobs:
             (Join-Path $packageDir "scripts\Start-QueueKiosk.ps1"),
             (Join-Path $packageDir "scripts\Start-QueueKiosk.vbs"),
             (Join-Path $packageDir "WINDOWS-AUTO-RECOVERY-GUIDE.md"),
+            (Join-Path $packageDir "USER-MANUAL.md"),
+            (Join-Path $packageDir "TROUBLESHOOTING.md"),
             (Join-Path $packageDir "RESTORE-INFINITY-BACKUP.bat"),
             (Join-Path $packageDir "runtime\node\node.exe"),
             (Join-Path $packageDir "runtime\node\npm.cmd")
@@ -202,12 +203,10 @@ jobs:
           Get-FileHash -Path $zipPath -Algorithm SHA256 | Format-List Algorithm,Hash,Path
 
       - name: Install Inno Setup
-        if: ${{ false }}
         shell: pwsh
         run: choco install innosetup --no-progress -y
 
       - name: Build Windows Setup Wizard
-        if: ${{ false }}
         shell: pwsh
         run: |
           $packageDir = Join-Path $env:RUNNER_TEMP "QueueSystem-Windows"
@@ -222,7 +221,6 @@ jobs:
           Get-FileHash -Path $setupPath -Algorithm SHA256 | Format-List Algorithm,Hash,Path
 
       - name: Test installer upgrade preserves customer data
-        if: ${{ false }}
         shell: pwsh
         run: |
           $setupPath = Join-Path $env:RUNNER_TEMP "QueueSystem-Setup.exe"
@@ -280,6 +278,16 @@ jobs:
           Write-Host "PASS: database, company settings, TLS certificate, and customer ad files survived the upgrade."
           Write-Host "PASS: application-owned files were replaced with the new package version."
           Remove-Item -LiteralPath $testDir -Recurse -Force
+
+      - name: Upload unsigned installer validation artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: QueueSystem-Windows11-Installer-Validation
+          path: |
+            ${{ runner.temp }}/QueueSystem-Setup.exe
+            ${{ runner.temp }}/QueueSystem-Windows11-Project.zip
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Publish public Windows 11 release candidate assets
         if: ${{ false }}
