@@ -1583,7 +1583,7 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
       ticket: { id: number; number: string };
     };
     assert.ok(generatedTicketData.ticket.id > 0);
-    assert.match(generatedTicketData.ticket.number, /^\\d+$/);
+    assert.match(generatedTicketData.ticket.number, /^\d+$/);
     const generatedTicketId = generatedTicketData.ticket.id;
 
     const publicTvWaiting = await fetch(`http://127.0.0.1:${address.port}/api/tv/queue`);
