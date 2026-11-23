@@ -1,56 +1,58 @@
-# INFINITY SERVICES — Local LAN Setup
+# QueueSystem — Windows Local LAN Setup
 
-## Intended topology
+This guide is for the current `goldenfingerph/queuesystem` project on the `main` branch. It replaces older setup notes that referred to a different repository and branch.
 
-- One Windows PC is the main server and owns the SQLite database.
-- Reception, counter workstations, and TV browsers connect to the server PC over the same trusted local network.
-- The server listens on port 4000 at `0.0.0.0`.
-- Database: `server/data/infinity.db`
-- Local advertisements: `server/public/ads/`
-- Database backups: `server/data/backups/`
+For complete operating instructions, see [USER-MANUAL.md](USER-MANUAL.md). For common errors, see [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
 
-Do not put the SQLite database or its WAL files on a shared network drive. Only the server PC opens the live database.
+## Intended network layout
 
-## First setup on the Windows server
+- One Windows 11 x64 PC hosts the QueueSystem server and its SQLite database.
+- Reception, counter workstations, and the TV display connect to that server over the same trusted private LAN.
+- Default server port: TCP 4000.
+- Default bind address: `0.0.0.0`.
+- Local database: `server/data/infinity.db`.
+- Backups: `server/data/backups/`.
 
-1. Install Node.js 22 LTS.
-2. Download the **`restore-local-sqlite-lan` branch ZIP** from [this exact link](https://github.com/Infinityqueue/infinity-services-queue-management/archive/refs/heads/restore-local-sqlite-lan.zip), then extract it to a permanent folder on the server PC (for example, `C:\\InfinityServices`). Do not download the `main` branch. Do not run the system from a temporary Downloads folder or a USB drive.
-3. Double-click `INSTALL-INFINITY-SERVICES.bat`. This installs the exact locked dependencies. Internet is needed only for this one-time package installation.
-4. Double-click `START-INFINITY-SERVICES.bat` to build the app and start the local server. Keep its black command window open while the queue system is operating. Press `CTRL+C` in that window to stop the server safely.
-5. On first database initialization, the application generates a random one-time admin password and prints it in the server console. Save that password immediately. Sign in with username `admin` and that password, then use **Change Password** at the bottom of the left sidebar.
-6. Right-click `ALLOW-LAN-FIREWALL.bat` and choose **Run as administrator**. It adds a firewall rule for TCP port 4000 on the Private network and local subnet only. Do not expose port 4000 to the public internet.
+Keep the live SQLite database on the server PC's local disk. Never place the database or its WAL files on a shared network drive.
 
-If you prefer manual setup, open PowerShell in the project folder, run `npm ci`, then run `npm run start`.
+## Installation and first launch
 
-The first `npm ci` requires internet access to download packages. Normal queue operation is local after dependencies and the project files are installed.
+For production, use only the final approved commercial Setup Wizard once it has completed installer validation and the fresh Windows 11 installation test. Do not use an old test installer.
 
-## Connect LAN devices
+For a current source/project package:
 
-Find the server PC's IPv4 address using `ipconfig`. On each Reception, Counter, and TV browser, open:
+1. Extract the complete package to a permanent writable folder on the server PC.
+2. Confirm the package includes the bundled Node.js 22 runtime under `runtime/node/`.
+3. Run `INSTALL-INFINITY-SERVICES.bat` once.
+4. Run `START-INFINITY-SERVICES.bat` and keep its window open while the server is in use.
+5. On the server PC, open `http://localhost:4000`.
+6. Complete the one-time QueueSystem setup screen, including organization details, language, timezone, business-day start, and administrator credentials.
 
-`http://SERVER-PC-IP:4000`
+The current package bundles Node.js 22 and npm. A system-wide Node.js installation should not be necessary when the complete self-contained package is used.
 
-Use a reserved/static DHCP address for the server PC so the address does not change. All devices must be on the same trusted LAN.
+## Allow LAN clients
 
-## Backup
+1. On the server PC, run `ipconfig` and note the active LAN adapter's IPv4 address.
+2. Reserve that address in the router/DHCP settings.
+3. If Windows Firewall blocks LAN connections, run `ALLOW-LAN-FIREWALL.bat` and approve Administrator permission. The rule is limited to the Private profile and local subnet.
+4. On each reception, counter, and TV device, open `http://SERVER-PC-IP:4000`.
 
-Sign in as Administrator, open System Settings, and choose **Create Backup Now**. Backups are stored locally in `server/data/backups/`. Download a copy to a separate USB drive or another protected location regularly. Database backups do not include MP4 advertisements; back up `server/public/ads/` separately.
+Do not expose TCP port 4000 to the public internet. Default HTTP/WS mode is unencrypted. Configure a trusted TLS certificate for HTTPS/WSS where encrypted transport is required; see [HTTPS-WSS-SETUP.md](HTTPS-WSS-SETUP.md).
 
-## Restore a database backup
+## Backups
 
-**Stop the queue server first.** Never replace the live SQLite database while the server is running.
+In QueueSystem, sign in with an authorized administrator account, open System Settings, and select **Create Backup Now**. Confirm that the backup appears in the list, download it, and copy it to protected storage separate from the server PC.
 
-1. Copy the desired `infinity-backup-....db` file into `server/data/backups/`.
-2. Stop the server by pressing `CTRL+C` in its black command window.
-3. Double-click `RESTORE-INFINITY-BACKUP.bat` and enter the exact backup filename when asked.
-4. The restore tool checks SQLite integrity, creates a safety backup of the current database, and then restores the selected file.
-5. Start the server again by double-clicking `START-INFINITY-SERVICES.bat` and verify the dashboard and queue.
+The database backup does not include local advertisement media or TLS certificate files. Back up `server/public/ads/` separately when used, and protect certificate/private-key files separately.
 
-Do not rename a file to imitate the expected backup naming pattern. Keep the safety backup until the restored system has been verified.
+## Restore
 
-## Important limitations before production use
+Stop the QueueSystem server and its startup watchdog before restoring. Copy the chosen `.db` file into `server/data/backups/`, keep a separate copy of the current database, and run `RESTORE-INFINITY-BACKUP.bat`. Enter the exact backup filename. The restore process validates the file and creates a safety copy before replacing the database.
 
-- Test the complete workflow on the actual Windows server and all LAN clients before daily use.
-- Browser printing and Zebra printer output depend on the installed printer driver and the specific Zebra model; verify ticket alignment and paper width (58/80 mm) on the actual printer.
-- The database backup does not include MP4 files; copy the ads folder separately.
-- The project is not intended to run its database from Vercel, Supabase, or browser storage.
+Restart QueueSystem and verify login, organization settings, counters, tickets, and reports before returning to normal service. Never replace a live database while the server is running.
+
+## Automatic startup and power recovery
+
+The Windows startup helper is designed to start the server and open the TV display after the Windows user signs in. BIOS/UEFI power recovery, Windows automatic sign-in, and sleep settings must be configured locally by an administrator. See [WINDOWS-AUTO-RECOVERY-GUIDE.md](WINDOWS-AUTO-RECOVERY-GUIDE.md).
+
+Actual restart, printing, audio, LAN, and power-recovery behavior must be checked on the target Windows PC and client devices before production use.
