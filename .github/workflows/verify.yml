@@ -32,7 +32,7 @@ jobs:
       - name: Regenerate lockfile from reviewed security overrides
         run: npm install --package-lock-only --ignore-scripts
       - name: Install locked dependencies
-        run: npm ci
+        run: npm ci --no-audit --no-fund
       - name: Report full npm security audit (including development tools)
         continue-on-error: true
         shell: pwsh
