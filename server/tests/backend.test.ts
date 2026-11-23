@@ -405,6 +405,16 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
       "INSERT INTO services (name, name_ar, code, prefix, ticket_range_start, ticket_range_end) VALUES ('Target service', 'الخدمة الهدف', 'TGT', 'T', 1500, 1999)",
     ).run().lastInsertRowid);
 
+    // These services are inserted directly as test fixtures, bypassing the
+    // service-management API that normally creates their sequence rows.
+    // Seed both sequences explicitly so ticket creation exercises the real
+    // allocation/update path rather than relying on lazy FK-backed inserts.
+    const seedTicketSequence = db.prepare(
+      'INSERT INTO ticket_sequences (service_id, next_number, last_reset_date) VALUES (?, ?, NULL)',
+    );
+    seedTicketSequence.run(sourceService, 1000);
+    seedTicketSequence.run(targetService, 1500);
+
     db.prepare('INSERT INTO counter_services (counter_id, service_id) VALUES (?, ?)').run(sourceCounter, sourceService);
     db.prepare('INSERT INTO counter_services (counter_id, service_id) VALUES (?, ?)').run(targetCounter, targetService);
     db.prepare(
