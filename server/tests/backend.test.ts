@@ -517,7 +517,7 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
       status: string; filename: string; sizeBytes: number; retentionCount: number; rotated: number;
     };
     assert.equal(backupResult.status, 'ok');
-    assert.match(backupResult.filename, /^queuesystem-backup-[\\dTZ-]+\\.db$/);
+    assert.match(backupResult.filename, /^queuesystem-backup-[\dTZ-]+\.db$/);
     assert.ok(backupResult.sizeBytes > 0, 'backup file must not be empty');
     assert.equal(backupResult.retentionCount, 30);
 
