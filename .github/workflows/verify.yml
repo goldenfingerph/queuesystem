@@ -68,7 +68,7 @@ jobs:
       - name: Lint frontend and backend
         run: npm run lint
       - name: Package Windows 11 project bundle
-        if: ${{ false }}
+        if: ${{ success() }}
         shell: pwsh
         run: |
           $packageDir = Join-Path $env:RUNNER_TEMP "QueueSystem-Windows"
@@ -204,12 +204,12 @@ jobs:
           Get-FileHash -Path $zipPath -Algorithm SHA256 | Format-List Algorithm,Hash,Path
 
       - name: Install Inno Setup
-        if: ${{ false }}
+        if: ${{ success() }}
         shell: pwsh
         run: choco install innosetup --no-progress -y
 
       - name: Build Windows Setup Wizard
-        if: ${{ false }}
+        if: ${{ success() }}
         shell: pwsh
         run: |
           $packageDir = Join-Path $env:RUNNER_TEMP "QueueSystem-Windows"
@@ -224,7 +224,7 @@ jobs:
           Get-FileHash -Path $setupPath -Algorithm SHA256 | Format-List Algorithm,Hash,Path
 
       - name: Test installer upgrade preserves customer data
-        if: ${{ false }}
+        if: ${{ success() }}
         shell: pwsh
         run: |
           $setupPath = Join-Path $env:RUNNER_TEMP "QueueSystem-Setup.exe"
@@ -284,7 +284,7 @@ jobs:
           Remove-Item -LiteralPath $testDir -Recurse -Force
 
       - name: Upload unsigned installer validation artifact
-        if: ${{ false }}
+        if: ${{ success() }}
         uses: actions/upload-artifact@v4
         with:
           name: QueueSystem-Windows11-Installer-Validation
