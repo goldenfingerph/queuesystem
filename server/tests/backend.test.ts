@@ -1768,6 +1768,60 @@ test('restore swap rolls back the original database when candidate replacement f
   }
 });
 
+
+test('restore rollback preserves a real SQLite database after installed candidate validation fails', () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'queuesystem-real-sqlite-rollback-'));
+  const databasePath = path.join(directory, 'live.db');
+  const candidatePath = path.join(directory, 'candidate.db');
+  const rollbackPath = path.join(directory, 'live.db.pre-restore');
+
+  const original = new Database(databasePath);
+  original.exec('CREATE TABLE recovery_check (value TEXT NOT NULL)');
+  original.prepare('INSERT INTO recovery_check (value) VALUES (?)').run('original-live-data');
+  original.close();
+
+  const candidate = new Database(candidatePath);
+  candidate.exec('CREATE TABLE recovery_check (value TEXT NOT NULL)');
+  candidate.prepare('INSERT INTO recovery_check (value) VALUES (?)').run('restored-candidate-data');
+  candidate.close();
+
+  try {
+    assert.throws(
+      () => replaceDatabaseWithRollback(databasePath, candidatePath, rollbackPath, () => {
+        const installed = new Database(databasePath, { readonly: true, fileMustExist: true });
+        try {
+          assert.equal(
+            installed.prepare('SELECT value FROM recovery_check').get()?.value,
+            'restored-candidate-data',
+            'candidate must be installed before final validation is attempted',
+          );
+          throw new Error('simulated post-install SQLite validation failure');
+        } finally {
+          installed.close();
+        }
+      }),
+      /simulated post-install SQLite validation failure/,
+    );
+
+    const recovered = new Database(databasePath, { readonly: true, fileMustExist: true });
+    try {
+      assert.deepEqual(recovered.pragma('integrity_check'), [{ integrity_check: 'ok' }],
+        'restored original SQLite database must pass integrity_check');
+      assert.equal(
+        recovered.prepare('SELECT value FROM recovery_check').get()?.value,
+        'original-live-data',
+        'rollback must restore the original committed SQLite data',
+      );
+    } finally {
+      recovered.close();
+    }
+    assert.equal(fs.existsSync(rollbackPath), false, 'successful rollback must move original DB back to live path');
+    assert.equal(fs.existsSync(candidatePath), false, 'failed installed candidate must not remain at candidate path');
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test('restore swap rolls back the original database when final validation fails', () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'queuesystem-restore-validation-swap-'));
   const databasePath = path.join(directory, 'live.db');
