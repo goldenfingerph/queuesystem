@@ -492,6 +492,68 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
     const address = server.address();
     assert.ok(address && typeof address !== 'string');
 
+    // Backup endpoint end-to-end verification: only admins may create, list,
+    // or download backups, and the downloaded SQLite file must contain the
+    // latest committed application data and pass the same restore validator.
+    const anonymousBackupList = await fetch(`http://127.0.0.1:${address.port}/api/backups`);
+    assert.equal(anonymousBackupList.status, 401, 'backup listing must require authentication');
+    const officerBackupCreate = await fetch(`http://127.0.0.1:${address.port}/api/backup`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    assert.equal(officerBackupCreate.status, 403, 'service officers must not create database backups');
+
+    const backupMarker = 'BACKUP-SNAPSHOT-VERIFY';
+    db.prepare(
+      "INSERT INTO tickets (number, service_id, status, priority, business_date, created_at) VALUES (?, ?, 'waiting', 'normal', ?, ?)",
+    ).run(backupMarker, sourceService, '2026-11-08', '2026-11-08 11:00:00');
+
+    const backupCreate = await fetch(`http://127.0.0.1:${address.port}/api/backup`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${reportAdminToken}` },
+    });
+    assert.equal(backupCreate.status, 200, await backupCreate.clone().text());
+    const backupResult = await backupCreate.json() as {
+      status: string; filename: string; sizeBytes: number; retentionCount: number; rotated: number;
+    };
+    assert.equal(backupResult.status, 'ok');
+    assert.match(backupResult.filename, /^queuesystem-backup-[\\dTZ-]+\\.db$/);
+    assert.ok(backupResult.sizeBytes > 0, 'backup file must not be empty');
+    assert.equal(backupResult.retentionCount, 30);
+
+    const backupList = await fetch(`http://127.0.0.1:${address.port}/api/backups`, {
+      headers: { authorization: `Bearer ${reportAdminToken}` },
+    });
+    assert.equal(backupList.status, 200);
+    const backupListData = await backupList.json() as {
+      backups: Array<{ id: number; filename: string; size_bytes: number }>;
+    };
+    const listedBackup = backupListData.backups.find((row) => row.filename === backupResult.filename);
+    assert.ok(listedBackup, 'new backup must be recorded and visible in the backup list');
+    assert.equal(listedBackup.size_bytes, backupResult.sizeBytes);
+
+    const backupDownload = await fetch(
+      `http://127.0.0.1:${address.port}/api/backups/${listedBackup.id}/download`,
+      { headers: { authorization: `Bearer ${reportAdminToken}` } },
+    );
+    assert.equal(backupDownload.status, 200, 'admin must be able to download the generated backup');
+    assert.match(backupDownload.headers.get('content-disposition') ?? '', /attachment; filename=/i);
+    const downloadedBackupPath = path.join(directory, 'downloaded-verification.db');
+    fs.writeFileSync(downloadedBackupPath, Buffer.from(await backupDownload.arrayBuffer()));
+    const downloadedBackup = new Database(downloadedBackupPath, { readonly: true, fileMustExist: true });
+    try {
+      assert.deepEqual(downloadedBackup.pragma('integrity_check'), [{ integrity_check: 'ok' }],
+        'downloaded backup must pass SQLite integrity_check');
+      assert.doesNotThrow(() => validateBackup(downloadedBackup),
+        'downloaded backup must satisfy QueueSystem restore schema validation');
+      assert.ok(
+        downloadedBackup.prepare('SELECT id FROM tickets WHERE number = ?').get(backupMarker),
+        'backup snapshot must include the latest committed ticket data',
+      );
+    } finally {
+      downloadedBackup.close();
+    }
+
     const [manifestResponse, workerResponse, iconResponse, pageResponse] = await Promise.all([
       fetch(`http://127.0.0.1:${address.port}/manifest.webmanifest`),
       fetch(`http://127.0.0.1:${address.port}/sw.js`),
