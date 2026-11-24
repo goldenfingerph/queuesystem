@@ -739,7 +739,7 @@ test('assigned service officer can transfer a waiting ticket pinned to their cou
     assert.match(csvText, /Ticket \/ رقم التذكرة/);
     assert.match(csvText, /خدمة المصدر/);
     assert.match(csvText, /"1001"/);
-    assert.match(csvText, /"'=HYPERLINK\(""https:\/\/example\.invalid"", ""Open""\), Main"/,
+    assert.match(csvText, /"'=HYPERLINK\(""https:\/\/example\.invalid"", ""Open""\), Main \/ خدمة المصدر"/,
       'CSV must quote cells and neutralize formula-like text before opening in spreadsheet software');
     assert.equal(csvText.split('\n').length, 4, 'CSV must contain one header and all three report rows');
     db.prepare('UPDATE services SET name = ? WHERE id = ?').run(originalServiceName, sourceService);
