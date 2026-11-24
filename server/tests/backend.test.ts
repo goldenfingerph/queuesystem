@@ -1791,7 +1791,7 @@ test('restore rollback preserves a real SQLite database after installed candidat
         const installed = new Database(databasePath, { readonly: true, fileMustExist: true });
         try {
           assert.equal(
-            installed.prepare('SELECT value FROM recovery_check').get()?.value,
+            (installed.prepare('SELECT value FROM recovery_check').get() as { value: string } | undefined)?.value,
             'restored-candidate-data',
             'candidate must be installed before final validation is attempted',
           );
@@ -1808,7 +1808,7 @@ test('restore rollback preserves a real SQLite database after installed candidat
       assert.deepEqual(recovered.pragma('integrity_check'), [{ integrity_check: 'ok' }],
         'restored original SQLite database must pass integrity_check');
       assert.equal(
-        recovered.prepare('SELECT value FROM recovery_check').get()?.value,
+        (recovered.prepare('SELECT value FROM recovery_check').get() as { value: string } | undefined)?.value,
         'original-live-data',
         'rollback must restore the original committed SQLite data',
       );
